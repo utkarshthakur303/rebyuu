@@ -11,7 +11,7 @@ import AdminPage from '@/app/pages/AdminPage';
 import ListsPage from '@/app/pages/ListsPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import Toaster from '@/app/components/Toaster';
-
+import { Analytics } from "@vercel/analytics/next"
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {

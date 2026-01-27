@@ -599,3 +599,6 @@
 {"location":"AdminPage.tsx:51","message":"loadComments success","data":{"count":0,"filter":"reported"},"timestamp":1768852727507,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
 {"location":"AnimeDetailPage.tsx:88","message":"submitReview optimistic update","data":{"optimisticId":"optimistic-1768853434404","userRating":10,"reviewLength":8},"timestamp":1768853434404,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
 {"location":"AnimeDetailPage.tsx:114","message":"comment insert success","data":{"optimisticId":"optimistic-1768853434404"},"timestamp":1768853434756,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
+{"location":"AdminPage.tsx:22","message":"loadComments effect","data":{"filter":"reported"},"timestamp":1768945487898,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"AdminPage.tsx:26","message":"loadComments called","data":{"filter":"reported"},"timestamp":1768945487899,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
+{"location":"AdminPage.tsx:51","message":"loadComments success","data":{"count":0,"filter":"reported"},"timestamp":1768945488326,"sessionId":"debug-session","runId":"run1","hypothesisId":"C"}
