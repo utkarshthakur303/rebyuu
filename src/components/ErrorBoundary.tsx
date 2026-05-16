@@ -57,30 +57,36 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-          <div className="max-w-md rounded-lg border border-destructive bg-card p-6 text-center shadow-lg">
-            <AlertTriangle className="mx-auto mb-4 h-12 w-12 text-destructive" />
-            <h2 className="mb-2 text-xl font-bold text-foreground">
+          <div className="max-w-md rounded-lg border border-gold/10 bg-card p-8 text-center shadow-2xl shadow-black/30">
+            {/* Decorative top line */}
+            <div className="mb-6 h-[1px] bg-gradient-to-r from-transparent via-crimson/30 to-transparent" />
+            
+            <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-crimson/70" />
+            <h2 className="mb-2 text-xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
               Something went wrong
             </h2>
-            <p className="mb-4 text-sm text-muted-foreground">
+            <p className="mb-6 text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
               {import.meta.env.DEV && this.state.error
                 ? this.state.error.message
-                : 'An unexpected error occurred. Please refresh the page.'}
+                : 'An unexpected disturbance has occurred. Please try again.'}
             </p>
-            <div className="flex gap-2 justify-center">
+            <div className="flex gap-3 justify-center">
               <button
                 onClick={this.handleReset}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                className="btn-imperial min-h-[44px] py-2 px-5 text-xs"
               >
                 Try Again
               </button>
               <button
                 onClick={() => window.location.reload()}
-                className="rounded-lg border border-border bg-transparent px-4 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                className="btn-imperial-outline min-h-[44px] py-2 px-5 text-xs"
               >
                 Refresh Page
               </button>
             </div>
+            
+            {/* Decorative bottom line */}
+            <div className="mt-6 h-[1px] bg-gradient-to-r from-transparent via-gold/10 to-transparent" />
           </div>
         </div>
       );

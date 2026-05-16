@@ -106,7 +106,6 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
     if (submitting) return;
     setSubmitting(true);
     try {
-      // Sanitize comment content to prevent XSS
       const { sanitizeComment } = await import('@/utils/sanitize');
       const sanitizedContent = sanitizeComment(comment.trim());
       
@@ -151,24 +150,24 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
           />
           <motion.div
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-0 sm:left-1/2 sm:top-1/2 sm:right-auto sm:bottom-auto sm:inset-auto z-50 max-h-[100vh] sm:max-h-[90vh] w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 overflow-y-auto rounded-none sm:rounded-2xl border-0 sm:border border-border bg-background shadow-2xl sm:mx-4"
+            className="fixed inset-0 sm:left-1/2 sm:top-1/2 sm:right-auto sm:bottom-auto sm:inset-auto z-50 max-h-[100vh] sm:max-h-[90vh] w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 overflow-y-auto rounded-none sm:rounded-lg border-0 sm:border border-gold/10 bg-background shadow-2xl shadow-black/50 sm:mx-4"
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background p-4 sm:p-6">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gold/10 bg-background p-4 sm:p-6">
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground">
+                <h2 className="text-xl sm:text-2xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
                   Episode {episodeNumber}
                 </h2>
-                <p className="text-xs sm:text-sm text-muted-foreground truncate">{animeTitle}</p>
+                <p className="text-xs text-muted-foreground truncate" style={{ fontFamily: 'Outfit, sans-serif' }}>{animeTitle}</p>
               </div>
               <button
                 onClick={onClose}
-                className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground shrink-0 ml-2"
+                className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground shrink-0 ml-2 min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <X className="h-5 w-5" />
               </button>
@@ -178,7 +177,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
               {user && (
                 <>
                   <div>
-                    <label className="mb-2 sm:mb-3 block text-sm font-medium text-foreground">
+                    <label className="mb-2 sm:mb-3 block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
                       Rate this episode
                     </label>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
@@ -187,11 +186,12 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                           key={r}
                           type="button"
                           onClick={() => setRating(r)}
-                          className={`flex h-10 w-10 sm:h-10 sm:w-10 items-center justify-center rounded-lg border text-base sm:text-base transition-all min-h-[44px] min-w-[44px] ${
+                          className={`flex h-10 w-10 items-center justify-center rounded-md border text-sm transition-all min-h-[44px] min-w-[44px] ${
                             rating >= r
-                              ? 'border-primary bg-primary text-white'
-                              : 'border-border bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
+                              ? 'border-crimson bg-crimson text-white'
+                              : 'border-gold/10 bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
                           }`}
+                          style={{ fontFamily: 'Outfit, sans-serif' }}
                         >
                           {r}
                         </button>
@@ -203,7 +203,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                           <button
                             onClick={handleSubmitRating}
                             disabled={submitting}
-                            className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-white transition-all hover:bg-primary/90 disabled:opacity-50"
+                            className="btn-imperial min-h-[40px] py-2 px-4 text-xs disabled:opacity-50"
                           >
                             {submitting ? 'Saving...' : 'Save Rating'}
                           </button>
@@ -246,7 +246,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                                 }
                               }}
                               disabled={deletingRating}
-                              className="rounded-lg p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                              className="rounded-md p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
                             >
                               {deletingRating ? (
                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
@@ -261,7 +261,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                   </div>
 
                   <form onSubmit={handleSubmitComment} className="space-y-3">
-                    <label className="block text-sm font-medium text-foreground">
+                    <label className="block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
                       Add a comment
                     </label>
                     <textarea
@@ -269,13 +269,13 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                       onChange={(e) => setComment(e.target.value)}
                       placeholder="Share your thoughts about this episode..."
                       rows={3}
-                      className="w-full rounded-lg border border-border bg-input-background px-4 py-3 text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                      className="input-imperial resize-none"
                       style={{ fontSize: '16px' }}
                     />
                     <button
                       type="submit"
                       disabled={!comment.trim() || submitting}
-                      className="w-full sm:w-auto rounded-lg bg-primary px-4 py-3 text-sm font-medium text-white transition-all hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                      className="btn-imperial w-full sm:w-auto min-h-[44px] disabled:opacity-30 disabled:cursor-not-allowed"
                     >
                       {submitting ? 'Posting...' : 'Post Comment'}
                     </button>
@@ -284,53 +284,53 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
               )}
 
               {!user && (
-                <div className="rounded-lg border border-border bg-card p-4 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Please log in to rate and comment on episodes
+                <div className="rounded-md border border-gold/10 bg-card p-4 text-center">
+                  <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                    Enter the archive to rate and comment on episodes
                   </p>
                 </div>
               )}
 
               <div>
                 <div className="mb-4 flex items-center gap-2">
-                  <MessageSquare className="h-5 w-5 text-primary" />
-                  <h3 className="text-lg font-semibold text-foreground">
+                  <MessageSquare className="h-4 w-4 text-crimson" />
+                  <h3 className="text-base font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
                     Comments ({comments.length})
                   </h3>
                 </div>
                 {loading ? (
                   <div className="space-y-4">
                     {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="animate-pulse space-y-2">
-                        <div className="h-4 w-3/4 rounded bg-card" />
-                        <div className="h-4 w-1/2 rounded bg-card" />
+                      <div key={i} className="space-y-2">
+                        <div className="h-4 w-3/4 skeleton-imperial" />
+                        <div className="h-4 w-1/2 skeleton-imperial" />
                       </div>
                     ))}
                   </div>
                 ) : comments.length === 0 ? (
-                  <p className="text-center text-sm text-muted-foreground py-8">
+                  <p className="text-center text-sm text-muted-foreground py-8" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
                     No comments yet. Be the first to comment!
                   </p>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {comments.map((c) => (
-                      <div key={c.id} className="rounded-lg border border-border bg-card p-4">
+                      <div key={c.id} className="rounded-md border border-gold/[0.06] bg-card p-4">
                         <div className="mb-2 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             {c.user.avatar_url ? (
                               <img
                                 src={c.user.avatar_url}
                                 alt={c.user.username}
-                                className="h-8 w-8 rounded-full object-cover"
+                                className="h-8 w-8 rounded-full object-cover border border-gold/10"
                               />
                             ) : (
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-crimson/10">
                                 {c.user.username.charAt(0)}
                               </div>
                             )}
                             <div>
-                              <p className="text-sm font-medium text-foreground">{c.user.username}</p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-sm font-medium text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.user.username}</p>
+                              <p className="text-[10px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
                                 {new Date(c.created_at).toLocaleDateString()}
                               </p>
                             </div>
@@ -373,7 +373,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                                 }
                               }}
                               disabled={deletingComment === c.id}
-                              className="rounded-lg p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                              className="rounded-md p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
                             >
                               {deletingComment === c.id ? (
                                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
@@ -383,7 +383,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                             </button>
                           )}
                         </div>
-                        <p className="text-sm text-foreground">{c.content}</p>
+                        <p className="text-sm text-foreground/80" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.content}</p>
                       </div>
                     ))}
                   </div>

@@ -42,7 +42,6 @@ export default function ListPickerModal({
     let cancelled = false
     const run = async () => {
       setLoading(true)
-      console.log('ListPickerModal: Fetching lists for user:', user.id)
       const { data, error } = await supabase
         .from('lists')
         .select('id,name,description,is_private')
@@ -51,12 +50,11 @@ export default function ListPickerModal({
       if (cancelled) return
       if (error) {
         console.error('lists load failed', error)
-        toast.error('Failed to load lists')
+        toast.error('Failed to load collections')
         setLists([])
         setLoading(false)
         return
       }
-      console.log('ListPickerModal: Lists fetched:', data?.length || 0)
       setLists((data ?? []) as ListRow[])
       setLoading(false)
     }
@@ -78,11 +76,11 @@ export default function ListPickerModal({
     if (error) {
       console.error('add to list failed', error)
       setAdded((prev) => ({ ...prev, [listId]: false }))
-      toast.error(error.message || 'Failed to add to list')
+      toast.error(error.message || 'Failed to add to collection')
       setSaving(null)
       return
     }
-    toast.success('Added to list')
+    toast.success('Added to collection')
     setSaving(null)
   }
 
@@ -101,13 +99,13 @@ export default function ListPickerModal({
       .single()
     if (error) {
       console.error('create list failed', error)
-      toast.error(error.message || 'Failed to create list')
+      toast.error(error.message || 'Failed to create collection')
       setLoading(false)
       return
     }
     if (data) {
       setLists((prev) => [data as ListRow, ...prev])
-      toast.success('List created')
+      toast.success('Collection created')
       setLoading(false)
     }
   }
@@ -121,7 +119,7 @@ export default function ListPickerModal({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
             <motion.div
@@ -129,47 +127,50 @@ export default function ListPickerModal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.5 }}
-              className="w-full max-w-lg rounded-2xl border border-border/50 bg-card p-6 shadow-2xl shadow-black/40"
+              className="w-full max-w-lg rounded-lg border border-gold/10 bg-card p-5 sm:p-6 shadow-2xl shadow-black/50"
             >
+              {/* Decorative top line */}
+              <div className="mb-4 h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
+
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-foreground">Add to List</h2>
+                <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Add to Collection</h2>
                 <button
                   onClick={onClose}
-                  className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="h-5 w-5" />
                 </button>
               </div>
 
               {!user && (
-                <div className="rounded-xl border border-border bg-background p-4 text-sm text-muted-foreground">
-                  Log in to manage lists
+                <div className="rounded-md border border-gold/10 bg-background p-4 text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                  Enter the archive to manage collections
                 </div>
               )}
 
               {user && (
                 <>
                   <div className="mb-4 flex items-center justify-between">
-                    <p className="text-sm text-muted-foreground">Choose a list</p>
+                    <p className="text-xs text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>Choose a collection</p>
                     <button
                       type="button"
                       onClick={() => setShowCreate(true)}
-                      className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90"
+                      className="btn-imperial min-h-[36px] py-1.5 px-3 text-[10px]"
                     >
-                      <Plus className="h-4 w-4" />
-                      New List
+                      <Plus className="h-3.5 w-3.5" />
+                      New
                     </button>
                   </div>
 
                   {loading ? (
-                    <div className="space-y-3">
+                    <div className="space-y-2">
                       {Array.from({ length: 4 }).map((_, i) => (
-                        <div key={i} className="h-14 animate-pulse rounded-xl bg-background" />
+                        <div key={i} className="h-14 skeleton-imperial" />
                       ))}
                     </div>
                   ) : lists.length === 0 ? (
-                    <div className="rounded-xl border border-dashed border-border p-8 text-center text-muted-foreground">
-                      No lists yet
+                    <div className="rounded-md border border-dashed border-gold/10 p-8 text-center text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                      No collections yet
                     </div>
                   ) : (
                     <div className="max-h-[50vh] space-y-2 overflow-y-auto pr-1">
@@ -182,22 +183,22 @@ export default function ListPickerModal({
                             type="button"
                             disabled={!canInteract || isBusy}
                             onClick={() => addToList(l.id)}
-                            className="flex w-full items-center justify-between gap-3 rounded-xl border border-border bg-background px-4 py-3 text-left transition-colors hover:bg-accent disabled:opacity-50"
+                            className="flex w-full items-center justify-between gap-3 rounded-md border border-gold/[0.06] bg-background px-4 py-3 text-left transition-all hover:bg-accent hover:border-gold/15 disabled:opacity-50 group"
                           >
                             <div className="min-w-0">
-                              <p className="truncate font-medium text-foreground">{l.name}</p>
-                              {l.description && <p className="truncate text-sm text-muted-foreground">{l.description}</p>}
+                              <p className="truncate font-medium text-sm text-foreground group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>{l.name}</p>
+                              {l.description && <p className="truncate text-xs text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{l.description}</p>}
                             </div>
                             <div className="flex items-center gap-2">
                               {isBusy ? (
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold/30 border-t-crimson" />
                               ) : isAdded ? (
-                                <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2.5 py-1 text-xs font-medium text-primary">
-                                  <Check className="h-3.5 w-3.5" />
+                                <span className="badge-imperial badge-bamboo">
+                                  <Check className="h-3 w-3" />
                                   Added
                                 </span>
                               ) : (
-                                <span className="text-xs text-muted-foreground">Add</span>
+                                <span className="text-[10px] text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>Add</span>
                               )}
                             </div>
                           </button>
@@ -220,4 +221,3 @@ export default function ListPickerModal({
     </AnimatePresence>
   )
 }
-

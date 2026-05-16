@@ -75,10 +75,10 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
     <>
       <motion.div
         ref={cardRef}
-        initial={{ opacity: 0, y: 20 }}
+        initial={{ opacity: 0, y: 24 }}
         animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: index * 0.05 }}
-        whileHover={{ y: typeof window !== 'undefined' && 'ontouchstart' in window ? 0 : -8, transition: { duration: 0.2 } }}
+        transition={{ duration: 0.5, delay: index * 0.04, ease: [0.23, 1, 0.32, 1] }}
+        whileHover={{ y: typeof window !== 'undefined' && 'ontouchstart' in window ? 0 : -6, transition: { duration: 0.3 } }}
         className="group relative w-full"
         onMouseEnter={typeof window !== 'undefined' && 'ontouchstart' in window ? undefined : handleMouseEnter}
         onMouseLeave={typeof window !== 'undefined' && 'ontouchstart' in window ? undefined : handleMouseLeave}
@@ -88,18 +88,17 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
           onClick={handleClick}
           className="block h-full cursor-pointer"
         >
-        <div className="relative h-full rounded-xl bg-card shadow-lg shadow-black/20 transition-shadow duration-300 group-hover:shadow-2xl group-hover:shadow-primary/20">
+        <div className="relative h-full overflow-hidden rounded-md bg-card border border-gold/[0.06] transition-all duration-500 group-hover:border-gold/20 group-hover:shadow-[0_15px_50px_rgba(0,0,0,0.4),0_0_30px_rgba(196,164,106,0.04)]">
           {/* Image Container */}
           <div className="relative aspect-[2/3] w-full overflow-hidden">
             {anime.cover_image ? (
               <img
                 src={anime.cover_image}
                 alt={anime.title || 'Anime'}
-                className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                 loading="lazy"
                 decoding="async"
                 onError={(e) => {
-                  // Fallback to gradient if image fails to load
                   const target = e.target as HTMLImageElement;
                   target.style.display = 'none';
                   const fallback = target.parentElement?.querySelector('.image-fallback') as HTMLDivElement;
@@ -107,34 +106,37 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
                 }}
               />
             ) : null}
-            <div className={`image-fallback h-full w-full bg-gradient-to-br from-primary to-purple-600 ${anime.cover_image ? 'hidden' : 'block'}`} />
+            <div className={`image-fallback h-full w-full bg-gradient-to-br from-crimson/60 via-crimson-dark/40 to-ink ${anime.cover_image ? 'hidden' : 'block'}`} />
             
-            {/* Gradient Overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-0 transition-opacity duration-300 group-hover:opacity-100" />
+            {/* Cinematic Gradient Overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-0 transition-opacity duration-500 group-hover:opacity-100" />
+            
+            {/* Top border glow on hover */}
+            <div className="absolute top-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gold/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
             
             {/* Rating Badge */}
             {anime.rating && (
               <div 
-                className="absolute right-3 top-3 flex items-center gap-1 rounded-full bg-black/70 px-2.5 py-1 backdrop-blur-sm"
+                className="absolute right-2 top-2 flex items-center gap-1 rounded-sm bg-black/70 px-2 py-1 backdrop-blur-sm border border-gold/10"
                 onClick={(e) => e.stopPropagation()}
               >
-                <Star className="h-3.5 w-3.5 fill-yellow-400 text-yellow-400" />
-                <span className="text-sm font-medium text-white">{anime.rating.toFixed(1)}</span>
+                <Star className="h-3 w-3 star-gold" />
+                <span className="text-xs font-semibold text-gold" style={{ fontFamily: 'Outfit, sans-serif' }}>{anime.rating.toFixed(1)}</span>
               </div>
             )}
 
             {/* Status Badge */}
             <div 
-              className="absolute left-3 top-3"
+              className="absolute left-2 top-2"
               onClick={(e) => e.stopPropagation()}
             >
-              <span className={`rounded-full px-2.5 py-1 text-xs font-medium backdrop-blur-sm ${
+              <span className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
                 anime.status === 'airing' 
-                  ? 'bg-green-500/80 text-white' 
+                  ? 'bg-bamboo/20 text-bamboo border-bamboo/30' 
                   : anime.status === 'upcoming'
-                  ? 'bg-blue-500/80 text-white'
-                  : 'bg-gray-500/80 text-white'
-              }`}>
+                  ? 'bg-gold/10 text-gold border-gold/20'
+                  : 'bg-charcoal/60 text-muted-foreground border-border/30'
+              }`} style={{ fontFamily: 'Outfit, sans-serif' }}>
                 {anime.status.toUpperCase()}
               </span>
             </div>
@@ -142,18 +144,19 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
             {/* Hover Content */}
             {anime.description && (
               <div 
-                className="absolute inset-x-0 bottom-0 translate-y-2 p-4 opacity-0 transition-all duration-300 group-hover:translate-y-0 group-hover:opacity-100"
+                className="absolute inset-x-0 bottom-0 translate-y-2 p-3 opacity-0 transition-all duration-400 group-hover:translate-y-0 group-hover:opacity-100"
                 onClick={(e) => e.stopPropagation()}
               >
-                <p className="mb-2 line-clamp-3 text-sm text-white/90">
+                <p className="mb-2 line-clamp-3 text-xs text-white/80 leading-relaxed" style={{ fontFamily: 'Outfit, sans-serif' }}>
                   {anime.description}
                 </p>
                 {anime.genres.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
+                  <div className="flex flex-wrap gap-1">
                     {anime.genres.slice(0, 3).map((genre) => (
                       <span
                         key={genre}
-                        className="rounded-md bg-primary/80 px-2 py-0.5 text-xs font-medium text-white backdrop-blur-sm"
+                        className="rounded-sm bg-crimson/60 px-1.5 py-0.5 text-[9px] font-medium tracking-wider uppercase text-white/90 backdrop-blur-sm"
+                        style={{ fontFamily: 'Outfit, sans-serif' }}
                       >
                         {genre}
                       </span>
@@ -165,13 +168,13 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
           </div>
 
           {/* Title and Info */}
-          <div className="p-3 sm:p-4 md:p-5">
-            <h3 className="mb-2 line-clamp-2 text-sm sm:text-base font-semibold text-foreground transition-colors group-hover:text-primary">
+          <div className="p-3 sm:p-3.5">
+            <h3 className="mb-1.5 line-clamp-2 text-sm font-semibold text-foreground transition-colors duration-300 group-hover:text-gold" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', lineHeight: '1.3' }}>
               {anime.title}
             </h3>
-            <div className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground">
+            <div className="flex items-center gap-2 text-[11px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
               {anime.year && <span>{anime.year}</span>}
-              {anime.year && anime.episodes && <span>•</span>}
+              {anime.year && anime.episodes && <span className="text-gold/20">◆</span>}
               {anime.episodes && <span>{anime.episodes} eps</span>}
             </div>
           </div>
@@ -186,7 +189,7 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.2 }}
-          className="hidden lg:block fixed z-[9999] w-80 rounded-xl border border-border bg-card shadow-2xl"
+          className="hidden lg:block fixed z-[9999] w-80 rounded-lg border border-gold/15 bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/50"
           style={{ 
             pointerEvents: 'none',
             top: `${previewPosition.top}px`,
@@ -198,7 +201,10 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
           }}
         >
           <div className="p-4">
-            <h3 className="mb-2 text-lg font-bold text-foreground line-clamp-2">
+            {/* Gold accent line */}
+            <div className="mb-3 h-[1px] bg-gradient-to-r from-crimson via-gold/30 to-transparent" />
+            
+            <h3 className="mb-2 text-lg font-bold text-foreground line-clamp-2" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
               {anime.title}
             </h3>
             
@@ -207,7 +213,8 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
                 {anime.genres.slice(0, 4).map((genre) => (
                   <span
                     key={genre}
-                    className="rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 text-xs font-medium text-primary"
+                    className="rounded-sm border border-gold/15 bg-gold/5 px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase text-gold/70"
+                    style={{ fontFamily: 'Outfit, sans-serif' }}
                   >
                     {genre}
                   </span>
@@ -216,20 +223,20 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
             )}
 
             {anime.description && (
-              <p className="text-sm text-muted-foreground line-clamp-4">
+              <p className="text-xs text-muted-foreground line-clamp-4 leading-relaxed" style={{ fontFamily: 'Outfit, sans-serif' }}>
                 {anime.description.length > 120 
                   ? `${anime.description.substring(0, 120)}...` 
                   : anime.description}
               </p>
             )}
 
-            <div className="mt-3 flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-4 text-[11px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
               {anime.year && <span>{anime.year}</span>}
               {anime.episodes && <span>{anime.episodes} episodes</span>}
               {anime.rating && (
                 <div className="flex items-center gap-1">
-                  <Star className="h-3 w-3 fill-yellow-400 text-yellow-400" />
-                  <span className="font-medium text-foreground">{anime.rating.toFixed(1)}</span>
+                  <Star className="h-3 w-3 star-gold" />
+                  <span className="font-semibold text-gold">{anime.rating.toFixed(1)}</span>
                 </div>
               )}
             </div>

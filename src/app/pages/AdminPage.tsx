@@ -20,18 +20,12 @@ export default function AdminPage() {
   const [filter, setFilter] = useState<'all' | 'reported'>('reported');
 
   useEffect(() => {
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/5824cb17-eaa4-4a83-9afc-c5dcf49adef7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AdminPage.tsx:22',message:'loadComments effect',data:{filter},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-    // #endregion
     loadComments();
   }, [filter]);
 
   const loadComments = async () => {
     setLoading(true);
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5824cb17-eaa4-4a83-9afc-c5dcf49adef7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AdminPage.tsx:26',message:'loadComments called',data:{filter},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
       let query = supabase
         .from('comments')
         .select(`
@@ -51,15 +45,7 @@ export default function AdminPage() {
       
       const { data, error } = await query.order('created_at', { ascending: false });
 
-      if (error) {
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/5824cb17-eaa4-4a83-9afc-c5dcf49adef7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AdminPage.tsx:48',message:'loadComments error',data:{error:error.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-        // #endregion
-        throw error;
-      }
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/5824cb17-eaa4-4a83-9afc-c5dcf49adef7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'AdminPage.tsx:51',message:'loadComments success',data:{count:data?.length||0,filter},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'})}).catch(()=>{});
-      // #endregion
+      if (error) throw error;
       setComments((data || []) as Comment[]);
     } catch (error) {
       console.error('Error loading comments:', error);
@@ -107,39 +93,39 @@ export default function AdminPage() {
           className="mb-8"
         >
           <div className="mb-6 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-primary/20 to-purple-600/20">
-              <Shield className="h-6 w-6 text-primary" />
+            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-crimson/10 border border-crimson/15">
+              <Shield className="h-6 w-6 text-crimson" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-foreground">Admin Panel</h1>
-              <p className="text-muted-foreground">Moderate user comments and content</p>
+              <h1 className="text-2xl sm:text-3xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Governance</h1>
+              <p className="text-xs text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>Moderate comments and content</p>
             </div>
           </div>
 
           {/* Stats */}
-          <div className="grid gap-4 sm:grid-cols-3">
-            <div className="rounded-xl border border-border bg-card p-6">
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-md border border-gold/[0.06] bg-card p-5">
               <div className="mb-2 flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-destructive" />
-                <span className="text-sm font-medium text-muted-foreground">Reported</span>
+                <AlertCircle className="h-4 w-4 text-destructive" />
+                <span className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Reported</span>
               </div>
-              <p className="text-3xl font-bold text-foreground">{reportedCount}</p>
+              <p className="text-2xl font-bold text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{reportedCount}</p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-6">
+            <div className="rounded-md border border-gold/[0.06] bg-card p-5">
               <div className="mb-2 flex items-center gap-2">
-                <Check className="h-5 w-5 text-green-500" />
-                <span className="text-sm font-medium text-muted-foreground">Resolved</span>
+                <Check className="h-4 w-4 text-bamboo" />
+                <span className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Resolved</span>
               </div>
-              <p className="text-3xl font-bold text-foreground">
+              <p className="text-2xl font-bold text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
                 {comments.length - reportedCount}
               </p>
             </div>
-            <div className="rounded-xl border border-border bg-card p-6">
+            <div className="rounded-md border border-gold/[0.06] bg-card p-5">
               <div className="mb-2 flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                <span className="text-sm font-medium text-muted-foreground">Total Comments</span>
+                <Shield className="h-4 w-4 text-crimson" />
+                <span className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Total</span>
               </div>
-              <p className="text-3xl font-bold text-foreground">{comments.length}</p>
+              <p className="text-2xl font-bold text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{comments.length}</p>
             </div>
           </div>
         </motion.div>
@@ -148,23 +134,25 @@ export default function AdminPage() {
         <div className="mb-6 flex gap-2">
           <button
             onClick={() => setFilter('reported')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-md px-4 py-2 text-xs font-medium tracking-wider uppercase transition-all min-h-[40px] ${
               filter === 'reported'
-                ? 'bg-primary text-white'
-                : 'border border-border bg-transparent text-foreground hover:bg-accent'
+                ? 'bg-crimson text-white shadow-lg shadow-crimson/20'
+                : 'border border-gold/10 bg-transparent text-foreground hover:bg-accent'
             }`}
+            style={{ fontFamily: 'Outfit, sans-serif' }}
           >
             Reported ({reportedCount})
           </button>
           <button
             onClick={() => setFilter('all')}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-md px-4 py-2 text-xs font-medium tracking-wider uppercase transition-all min-h-[40px] ${
               filter === 'all'
-                ? 'bg-primary text-white'
-                : 'border border-border bg-transparent text-foreground hover:bg-accent'
+                ? 'bg-crimson text-white shadow-lg shadow-crimson/20'
+                : 'border border-gold/10 bg-transparent text-foreground hover:bg-accent'
             }`}
+            style={{ fontFamily: 'Outfit, sans-serif' }}
           >
-            All Comments ({comments.length})
+            All ({comments.length})
           </button>
         </div>
 
@@ -173,30 +161,30 @@ export default function AdminPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
-          className="overflow-hidden rounded-xl border border-border bg-card"
+          className="overflow-hidden rounded-md border border-gold/[0.06] bg-card"
         >
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-border bg-muted/50">
-                  <th className="px-6 py-4 text-left text-sm font-medium text-foreground">User</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Comment</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Date</th>
-                  <th className="px-6 py-4 text-left text-sm font-medium text-foreground">Status</th>
-                  <th className="px-6 py-4 text-right text-sm font-medium text-foreground">Actions</th>
+                <tr className="border-b border-gold/[0.06] bg-ink/30">
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>User</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>Comment</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>Date</th>
+                  <th className="px-5 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>Status</th>
+                  <th className="px-5 py-3 text-right text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-border">
+              <tbody className="divide-y divide-gold/[0.04]">
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center">
-                      <p className="text-muted-foreground">Loading...</p>
+                      <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-gold/30 border-t-crimson" />
                     </td>
                   </tr>
                 ) : comments.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center">
-                      <p className="text-muted-foreground">No comments to display</p>
+                      <p className="text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>No entries to display</p>
                     </td>
                   </tr>
                 ) : (
@@ -205,53 +193,54 @@ export default function AdminPage() {
                       key={comment.id}
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.3, delay: index * 0.05 }}
-                      className="hover:bg-muted/30"
+                      transition={{ duration: 0.3, delay: index * 0.03 }}
+                      className="hover:bg-accent/30 transition-colors"
                     >
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-crimson/10">
                             {comment.user?.username?.charAt(0) || '?'}
                           </div>
-                          <span className="font-medium text-foreground">{comment.user?.username || 'Unknown'}</span>
+                          <span className="font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{comment.user?.username || 'Unknown'}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4">
-                        <p className="max-w-md truncate text-sm text-foreground">{comment.content}</p>
+                      <td className="px-5 py-4">
+                        <p className="max-w-md truncate text-sm text-foreground/70" style={{ fontFamily: 'Outfit, sans-serif' }}>{comment.content}</p>
                       </td>
-                      <td className="px-6 py-4">
-                        <span className="text-sm text-muted-foreground">
+                      <td className="px-5 py-4">
+                        <span className="text-xs text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
                           {new Date(comment.created_at).toLocaleDateString()}
                         </span>
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-4">
                         {comment.reported ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-destructive/10 px-2.5 py-1 text-xs font-medium text-destructive">
+                          <span className="badge-imperial badge-crimson">
                             <AlertCircle className="h-3 w-3" />
                             Reported
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-green-500/10 px-2.5 py-1 text-xs font-medium text-green-500">
+                          <span className="badge-imperial badge-bamboo">
                             <Check className="h-3 w-3" />
                             Resolved
                           </span>
                         )}
                       </td>
-                      <td className="px-6 py-4">
+                      <td className="px-5 py-4">
                         <div className="flex items-center justify-end gap-2">
                           {comment.reported && (
                             <button
                               onClick={() => handleIgnore(comment.id)}
-                              className="rounded-lg border border-border bg-transparent px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+                              className="rounded-md border border-gold/10 bg-transparent px-3 py-1.5 text-[10px] font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-gold/20"
+                              style={{ fontFamily: 'Outfit, sans-serif' }}
                             >
                               Ignore
                             </button>
                           )}
                           <button
                             onClick={() => handleDelete(comment.id)}
-                            className="rounded-lg bg-destructive/10 px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/20"
+                            className="rounded-md bg-destructive/10 px-3 py-1.5 text-[10px] font-medium text-destructive transition-colors hover:bg-destructive/20"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Trash2 className="h-3.5 w-3.5" />
                           </button>
                         </div>
                       </td>

@@ -1,0 +1,1 @@
+function r(e,n=1e4){if(typeof e!="string")return"";let t=e.trim().slice(0,n);return t=t.replace(/\0/g,""),t=t.replace(/[\u200B-\u200D\uFEFF]/g,""),t}function i(e){return r(e,5e3)}function u(e){return r(e,200)}export{i as sanitizeComment,r as sanitizeInput,u as sanitizeSearchQuery};

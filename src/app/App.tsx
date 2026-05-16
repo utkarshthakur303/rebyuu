@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { useEffect } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Navigation } from '@/app/components/Navigation';
+import { Footer } from '@/app/components/Footer';
 import LandingPage from '@/app/pages/LandingPage';
 import BrowsePage from '@/app/pages/BrowsePage';
 import AnimeDetailPage from '@/app/pages/AnimeDetailPage';
@@ -12,6 +13,7 @@ import ListsPage from '@/app/pages/ListsPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import Toaster from '@/app/components/Toaster';
 import { Analytics } from "@vercel/analytics/next"
+
 function ScrollToTop() {
   const { pathname } = useLocation();
   useEffect(() => {
@@ -24,19 +26,22 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <div className="dark min-h-screen bg-background text-foreground">
+        <div className="dark min-h-screen bg-background text-foreground grain-overlay">
           <ScrollToTop />
           <Navigation />
           <Toaster />
-          <Routes>
-            <Route path="/" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
-            <Route path="/browse" element={<ErrorBoundary><ProtectedRoute><BrowsePage /></ProtectedRoute></ErrorBoundary>} />
-            <Route path="/anime/:id" element={<ErrorBoundary><AnimeDetailPage /></ErrorBoundary>} />
-            <Route path="/profile" element={<ErrorBoundary><ProtectedRoute><ProfilePage /></ProtectedRoute></ErrorBoundary>} />
-            <Route path="/lists" element={<ErrorBoundary><ProtectedRoute><ListsPage /></ProtectedRoute></ErrorBoundary>} />
-            <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
-            <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
-          </Routes>
+          <main className="relative z-10">
+            <Routes>
+              <Route path="/" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
+              <Route path="/browse" element={<ErrorBoundary><ProtectedRoute><BrowsePage /></ProtectedRoute></ErrorBoundary>} />
+              <Route path="/anime/:id" element={<ErrorBoundary><AnimeDetailPage /></ErrorBoundary>} />
+              <Route path="/profile" element={<ErrorBoundary><ProtectedRoute><ProfilePage /></ProtectedRoute></ErrorBoundary>} />
+              <Route path="/lists" element={<ErrorBoundary><ProtectedRoute><ListsPage /></ProtectedRoute></ErrorBoundary>} />
+              <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
+              <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
+            </Routes>
+          </main>
+          <Footer />
         </div>
       </BrowserRouter>
     </ErrorBoundary>

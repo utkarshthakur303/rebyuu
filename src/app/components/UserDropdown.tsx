@@ -39,46 +39,52 @@ export function UserDropdown() {
     <div className="relative" ref={dropdownRef}>
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent"
+        className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-foreground/80 transition-all hover:bg-accent group"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-primary to-purple-600 text-xs font-bold text-white">
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-crimson to-crimson-dark text-[10px] font-bold text-white border border-gold/10 group-hover:border-gold/20 transition-colors">
           {initials}
         </div>
-        <ChevronDown className={`h-4 w-4 transition-transform ${open ? 'rotate-180' : ''}`} />
+        <ChevronDown className={`h-3.5 w-3.5 text-gold/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
       </button>
 
       <AnimatePresence>
         {open && (
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-            className="absolute right-0 top-full z-50 mt-2 w-48 rounded-lg border border-border bg-card shadow-lg"
+            initial={{ opacity: 0, y: -8, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -8, scale: 0.96 }}
+            transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
+            className="absolute right-0 top-full z-50 mt-2 w-48 rounded-md border border-gold/10 bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/40"
           >
-            <div className="p-2">
+            {/* Decorative top line */}
+            <div className="h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
+            
+            <div className="p-1.5">
               <Link
                 to="/profile"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-xs tracking-wider text-foreground/70 transition-all hover:bg-accent hover:text-foreground"
+                style={{ fontFamily: 'Outfit, sans-serif' }}
               >
-                <User className="h-4 w-4" />
+                <User className="h-3.5 w-3.5 text-gold/40" />
                 Profile
               </Link>
               <Link
                 to="/profile"
                 onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-accent"
+                className="flex items-center gap-3 rounded-md px-3 py-2 text-xs tracking-wider text-foreground/70 transition-all hover:bg-accent hover:text-foreground"
+                style={{ fontFamily: 'Outfit, sans-serif' }}
               >
-                <Settings className="h-4 w-4" />
+                <Settings className="h-3.5 w-3.5 text-gold/40" />
                 Settings
               </Link>
-              <div className="my-1 h-px bg-border" />
+              <div className="my-1 h-px bg-gradient-to-r from-transparent via-gold/8 to-transparent" />
               <button
                 onClick={handleLogout}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-foreground transition-colors hover:bg-destructive/10 hover:text-destructive"
+                className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-xs tracking-wider text-foreground/70 transition-all hover:bg-destructive/10 hover:text-destructive"
+                style={{ fontFamily: 'Outfit, sans-serif' }}
               >
-                <LogOut className="h-4 w-4" />
+                <LogOut className="h-3.5 w-3.5" />
                 Logout
               </button>
             </div>

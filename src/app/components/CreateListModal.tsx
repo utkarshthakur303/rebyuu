@@ -32,7 +32,7 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={onClose}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm"
           />
 
           {/* Modal */}
@@ -42,16 +42,19 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.5 }}
-              className="w-full h-full sm:h-auto sm:max-w-md sm:rounded-2xl border-0 sm:border border-border/50 bg-card p-4 sm:p-6 shadow-2xl shadow-black/40 sm:my-auto"
+              className="w-full h-full sm:h-auto sm:max-w-md sm:rounded-lg border-0 sm:border border-gold/10 bg-card p-5 sm:p-6 shadow-2xl shadow-black/50 sm:my-auto"
             >
+              {/* Decorative top line */}
+              <div className="mb-5 h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
+
               {/* Header */}
               <div className="mb-6 flex items-center justify-between">
-                <h2 className="bg-gradient-to-r from-primary to-purple-600 bg-clip-text text-2xl font-bold text-transparent">
-                  Create New List
+                <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+                  Create Collection
                 </h2>
                 <button
                   onClick={onClose}
-                  className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                  className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
                 >
                   <X className="h-5 w-5" />
                 </button>
@@ -61,8 +64,8 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
               <form onSubmit={handleSubmit} className="space-y-4">
                 {/* List Name */}
                 <div>
-                  <label htmlFor="listName" className="mb-2 block text-sm font-medium text-foreground">
-                    List Name
+                  <label htmlFor="listName" className="mb-2 block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                    Name
                   </label>
                   <input
                     id="listName"
@@ -71,14 +74,14 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
                     onChange={(e) => setName(e.target.value)}
                     placeholder="My Watchlist"
                     required
-                    className="w-full rounded-lg border border-border bg-input-background px-4 py-3 text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 min-h-[44px]"
+                    className="input-imperial min-h-[44px]"
                     style={{ fontSize: '16px' }}
                   />
                 </div>
 
                 {/* Description */}
                 <div>
-                  <label htmlFor="description" className="mb-2 block text-sm font-medium text-foreground">
+                  <label htmlFor="description" className="mb-2 block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
                     Description (Optional)
                   </label>
                   <textarea
@@ -87,22 +90,22 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
                     onChange={(e) => setDescription(e.target.value)}
                     placeholder="A collection of anime I plan to watch..."
                     rows={3}
-                    className="w-full rounded-lg border border-border bg-input-background px-4 py-3 text-base sm:text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                    className="input-imperial resize-none"
                     style={{ fontSize: '16px' }}
                   />
                 </div>
 
                 {/* Privacy Toggle */}
-                <div className="flex items-center justify-between rounded-lg border border-border bg-input-background p-4">
+                <div className="flex items-center justify-between rounded-md border border-gold/10 bg-input-background p-4">
                   <div>
-                    <p className="font-medium text-foreground">Private List</p>
-                    <p className="text-sm text-muted-foreground">Only you can see this list</p>
+                    <p className="font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Private Collection</p>
+                    <p className="text-xs text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Only you can see this</p>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsPrivate(!isPrivate)}
                     className={`relative h-6 w-11 rounded-full transition-colors ${
-                      isPrivate ? 'bg-primary' : 'bg-muted'
+                      isPrivate ? 'bg-crimson' : 'bg-charcoal'
                     }`}
                   >
                     <motion.div
@@ -118,16 +121,16 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
                   <button
                     type="button"
                     onClick={onClose}
-                    className="flex-1 rounded-lg border border-border bg-transparent px-4 py-3 font-medium text-foreground transition-colors hover:bg-accent min-h-[44px]"
+                    className="btn-imperial-outline flex-1 min-h-[48px]"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
                     disabled={!name.trim()}
-                    className="flex-1 rounded-lg bg-gradient-to-r from-primary to-purple-600 px-4 py-3 font-medium text-white shadow-lg shadow-primary/20 transition-all hover:shadow-xl hover:shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+                    className="btn-imperial flex-1 min-h-[48px] disabled:opacity-30 disabled:cursor-not-allowed"
                   >
-                    Create List
+                    Create Collection
                   </button>
                 </div>
               </form>

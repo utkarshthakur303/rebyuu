@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { Sparkles } from 'lucide-react';
 import { motion } from 'motion/react';
 import { Link } from 'react-router-dom';
 import { AnimeCard } from '@/app/components/AnimeCard';
@@ -42,119 +41,206 @@ export default function LandingPage() {
 
   const Section = ({
     title,
+    subtitle,
     items
   }: {
     title: string
+    subtitle?: string
     items: Anime[]
   }) => {
     return (
-      <section className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
-        <div className="mb-6 sm:mb-8 flex items-center justify-between">
-          <div className="flex items-center gap-3 sm:gap-4">
-            <div className="h-8 sm:h-10 w-1 rounded-full bg-gradient-to-b from-primary via-purple-500 to-purple-600"></div>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-primary via-purple-500 to-indigo-500 bg-clip-text text-transparent">
-              {title}
-            </h2>
+      <motion.section
+        initial={{ opacity: 0, y: 40 }}
+        whileInView={{ opacity: 1, y: 0 }}
+        viewport={{ once: true, margin: '-80px' }}
+        transition={{ duration: 0.7, ease: [0.23, 1, 0.32, 1] }}
+        className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-6 sm:py-8 md:py-12"
+      >
+        <div className="mb-6 sm:mb-8 flex items-end justify-between">
+          <div className="flex items-start gap-4">
+            {/* Crimson accent bar */}
+            <div className="hidden sm:block h-12 w-[3px] rounded-full bg-gradient-to-b from-crimson via-crimson/50 to-transparent mt-1 shrink-0" />
+            <div>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground tracking-wide" style={{ fontFamily: 'Cinzel, serif' }}>
+                {title}
+              </h2>
+              {subtitle && (
+                <p className="mt-1 text-xs tracking-[0.15em] uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                  {subtitle}
+                </p>
+              )}
+            </div>
           </div>
-          <Link to="/browse" className="text-sm font-medium text-primary hover:underline shrink-0">
+          <Link 
+            to="/browse" 
+            className="text-xs font-medium tracking-[0.1em] uppercase text-gold/60 hover:text-gold transition-colors duration-300 shrink-0 border-b border-gold/20 hover:border-gold/40 pb-0.5"
+            style={{ fontFamily: 'Outfit, sans-serif' }}
+          >
             View All
           </Link>
         </div>
         {loading ? (
-          <div className="flex gap-4 overflow-x-auto pb-2">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
             {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="h-[270px] w-44 shrink-0 animate-pulse rounded-xl bg-card" />
+              <div key={i} className="aspect-[2/3] skeleton-imperial" />
             ))}
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
-            Nothing here yet
+          <div className="rounded-lg border border-dashed border-gold/10 p-10 text-center text-muted-foreground">
+            <p style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>The archive awaits...</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-5 gap-3 sm:gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
             {items.map((anime, index) => (
               <AnimeCard key={anime.id} anime={anime} index={index} />
             ))}
           </div>
         )}
-      </section>
+      </motion.section>
     )
   }
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0 overflow-x-hidden">
-      {/* Hero Section */}
-      <section className="relative h-[60vh] min-h-[400px] sm:h-[65vh] sm:min-h-[450px] md:h-[70vh] md:min-h-[500px] overflow-hidden">
-        {/* Background Image with Overlay */}
+      {/* ═══ CINEMATIC HERO SECTION ═══ */}
+      <section className="relative h-[65vh] min-h-[420px] sm:h-[70vh] sm:min-h-[480px] md:h-[80vh] md:min-h-[560px] overflow-hidden">
+        {/* Background Image */}
         <div className="absolute inset-0">
           <img
             src="https://images.unsplash.com/photo-1613376023733-0a73315d9b06?w=1920"
             alt="Hero"
             className="h-full w-full object-cover"
           />
-          <div className="absolute inset-0 bg-gradient-to-r from-background via-background/80 to-transparent" />
-          <div className="absolute inset-0 bg-gradient-to-t from-background via-transparent to-transparent" />
+          {/* Multi-layer cinematic gradients */}
+          <div className="hero-gradient-left absolute inset-0" />
+          <div className="hero-gradient-cinematic absolute inset-0" />
+          {/* Vignette */}
+          <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 40%, rgba(8,8,8,0.6) 100%)' }} />
+        </div>
+
+        {/* Floating ember particles (decorative) */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          {[...Array(5)].map((_, i) => (
+            <div
+              key={i}
+              className="ember-particle"
+              style={{
+                left: `${15 + i * 18}%`,
+                bottom: '10%',
+                animationDelay: `${i * 0.8}s`,
+                animationDuration: `${3 + i * 0.5}s`,
+                opacity: 0.4,
+              }}
+            />
+          ))}
         </div>
 
         {/* Hero Content */}
-        <div className="relative mx-auto flex h-full max-w-7xl items-center px-4 sm:px-6 lg:px-8">
+        <div className="relative mx-auto flex h-full max-w-7xl items-end px-4 sm:px-6 lg:px-8 pb-12 sm:pb-16 md:pb-20">
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6 }}
+            transition={{ duration: 0.9, ease: [0.23, 1, 0.32, 1] }}
             className="max-w-2xl"
           >
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-primary/10 px-4 py-1.5 backdrop-blur-sm">
-              <Sparkles className="h-4 w-4 text-primary" />
-              <span className="text-sm font-medium text-primary">Discover Your Next Favorite</span>
-            </div>
+            {/* Decorative top element */}
+            <motion.div
+              initial={{ opacity: 0, scaleX: 0 }}
+              animate={{ opacity: 1, scaleX: 1 }}
+              transition={{ duration: 0.6, delay: 0.3 }}
+              className="mb-5 flex items-center gap-3"
+            >
+              <div className="h-[1px] w-8 bg-gradient-to-r from-crimson to-transparent" />
+              <span className="text-[10px] font-semibold tracking-[0.25em] uppercase text-gold/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                Sacred Anime Archive
+              </span>
+              <div className="h-[1px] w-8 bg-gradient-to-l from-gold/30 to-transparent" />
+            </motion.div>
 
-            <h1 className="mb-3 sm:mb-4 bg-gradient-to-r from-foreground to-foreground/60 bg-clip-text text-3xl sm:text-4xl md:text-5xl lg:text-6xl xl:text-7xl font-bold leading-tight text-transparent">
-              Explore the World of Anime
+            <h1 className="mb-4 sm:mb-5 text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-[1.05] text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+              <span className="block">Explore the</span>
+              <span className="block bg-gradient-to-r from-gold via-gold-light to-gold bg-clip-text text-transparent">
+                World of Anime
+              </span>
             </h1>
 
-            <p className="mb-6 sm:mb-8 text-base sm:text-lg md:text-xl text-muted-foreground">
-              Discover, track, and share your anime journey. Join millions of fans exploring the best anime series.
+            <p className="mb-7 sm:mb-9 text-sm sm:text-base md:text-lg text-foreground/60 max-w-lg leading-relaxed" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>
+              Discover, track, and share your anime journey. A cinematic archive 
+              for those who seek the finest in animated storytelling.
             </p>
 
-            <Link
-              to="/browse"
-              className="group inline-flex items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-primary to-purple-600 px-5 py-3 sm:px-6 font-semibold text-white shadow-lg shadow-primary/30 transition-all hover:shadow-xl hover:shadow-primary/40 min-h-[44px] w-full sm:w-auto"
-            >
-              <span>Explore Now</span>
-            </Link>
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+              <Link
+                to="/browse"
+                className="btn-imperial text-center min-h-[48px]"
+              >
+                <span>Enter the Archive</span>
+              </Link>
+              {!user && (
+                <Link
+                  to="/login"
+                  className="btn-imperial-outline text-center min-h-[48px]"
+                >
+                  <span>Join the Order</span>
+                </Link>
+              )}
+            </div>
           </motion.div>
         </div>
+
+        {/* Bottom decorative line */}
+        <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
       </section>
 
-      <Section title="Trending" items={trendingAnime} />
-      <Section title="Fan Favorites" items={fanFavorites} />
-      <Section title="Airing Now" items={airingNow} />
-      <Section title="Upcoming" items={upcoming} />
+      {/* ═══ CONTENT SECTIONS ═══ */}
+      <Section title="Trending" subtitle="Most watched this season" items={trendingAnime} />
+      
+      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="brush-divider" />
+      </div>
 
-      {/* Popular Genres */}
-      <section className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-8 sm:py-10 md:py-12">
+      <Section title="Fan Favorites" subtitle="Beloved by the community" items={fanFavorites} />
+      
+      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="brush-divider" />
+      </div>
+
+      <Section title="Airing Now" subtitle="Currently broadcasting" items={airingNow} />
+      
+      <div className="mx-auto max-w-7xl px-6 lg:px-8">
+        <div className="brush-divider" />
+      </div>
+
+      <Section title="Upcoming" subtitle="Anticipated releases" items={upcoming} />
+
+      {/* ═══ POPULAR GENRES ═══ */}
+      <section className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-10 sm:py-14 md:py-16">
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
+          initial={{ opacity: 0, y: 30 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          transition={{ duration: 0.5 }}
+          transition={{ duration: 0.6 }}
         >
-          <div className="flex items-center gap-3 sm:gap-4 mb-6 sm:mb-8">
-            <div className="h-8 sm:h-10 w-1 rounded-full bg-gradient-to-b from-primary via-purple-500 to-purple-600"></div>
-            <h2 className="text-2xl sm:text-3xl md:text-4xl font-extrabold bg-gradient-to-r from-primary via-purple-500 to-indigo-500 bg-clip-text text-transparent">
-              Popular Genres
-            </h2>
+          <div className="flex items-start gap-4 mb-8 sm:mb-10">
+            <div className="hidden sm:block h-12 w-[3px] rounded-full bg-gradient-to-b from-crimson via-crimson/50 to-transparent mt-1 shrink-0" />
+            <div>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground tracking-wide" style={{ fontFamily: 'Cinzel, serif' }}>
+                Genres
+              </h2>
+              <p className="mt-1 text-xs tracking-[0.15em] uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                Explore by category
+              </p>
+            </div>
           </div>
           
           <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-6">
             {popularGenres.map((genre, index) => (
               <motion.div
                 key={genre}
-                initial={{ opacity: 0, scale: 0.9 }}
-                whileInView={{ opacity: 1, scale: 1 }}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
-                transition={{ duration: 0.3, delay: index * 0.05 }}
+                transition={{ duration: 0.4, delay: index * 0.06 }}
                 onHoverStart={() => setHoveredGenre(genre)}
                 onHoverEnd={() => setHoveredGenre(null)}
                 className="relative"
@@ -163,15 +249,18 @@ export default function LandingPage() {
                   to={`/browse?genre=${genre.toLowerCase()}`}
                   className="group block"
                 >
-                  <div className="relative overflow-hidden rounded-xl border border-border/50 bg-gradient-to-br from-card to-card/50 p-4 sm:p-6 text-center transition-all hover:border-primary/50 hover:shadow-lg hover:shadow-primary/10 active:border-primary/50 active:shadow-lg active:shadow-primary/10">
+                  <div className="relative overflow-hidden rounded-md border border-gold/[0.08] bg-card p-5 sm:p-6 text-center transition-all duration-500 hover:border-gold/25 hover:shadow-[0_10px_40px_rgba(0,0,0,0.3)] active:border-gold/25">
                     {hoveredGenre === genre && typeof window !== 'undefined' && !('ontouchstart' in window) && (
                       <motion.div
                         layoutId="genreHover"
-                        className="absolute inset-0 bg-primary/5"
+                        className="absolute inset-0 bg-gradient-to-br from-crimson/[0.04] to-gold/[0.03]"
                         transition={{ type: 'spring', duration: 0.5 }}
                       />
                     )}
-                    <p className="relative z-10 font-semibold text-sm sm:text-base text-foreground transition-colors group-hover:text-primary">
+                    {/* Decorative top line */}
+                    <div className="absolute top-0 left-1/4 right-1/4 h-[1px] bg-gradient-to-r from-transparent via-gold/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                    
+                    <p className="relative z-10 font-semibold text-sm text-foreground/80 transition-colors duration-300 group-hover:text-gold tracking-wide" style={{ fontFamily: 'Outfit, sans-serif', letterSpacing: '0.08em' }}>
                       {genre}
                     </p>
                   </div>
@@ -182,30 +271,46 @@ export default function LandingPage() {
         </motion.div>
       </section>
 
+      {/* ═══ CTA SECTION ═══ */}
       {!user && (
         <section className="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 30 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.5 }}
-            className="relative overflow-hidden rounded-2xl border border-border/50 bg-gradient-to-br from-primary/10 via-purple-600/10 to-primary/10 p-8 md:p-12"
+            transition={{ duration: 0.6 }}
+            className="relative overflow-hidden rounded-lg border border-gold/10 bg-card p-8 md:p-14"
           >
-            <div className="absolute right-0 top-0 h-64 w-64 rounded-full bg-primary/20 blur-3xl" />
-            <div className="absolute bottom-0 left-0 h-64 w-64 rounded-full bg-purple-600/20 blur-3xl" />
+            {/* Atmospheric orbs */}
+            <div className="absolute right-0 top-0 h-72 w-72 rounded-full bg-crimson/[0.04] blur-[100px]" />
+            <div className="absolute bottom-0 left-0 h-72 w-72 rounded-full bg-gold/[0.03] blur-[100px]" />
+            
+            {/* Decorative corners */}
+            <div className="absolute top-4 left-4 w-8 h-8 border-t border-l border-gold/15" />
+            <div className="absolute top-4 right-4 w-8 h-8 border-t border-r border-gold/15" />
+            <div className="absolute bottom-4 left-4 w-8 h-8 border-b border-l border-gold/15" />
+            <div className="absolute bottom-4 right-4 w-8 h-8 border-b border-r border-gold/15" />
             
             <div className="relative text-center">
-              <h2 className="mb-4 text-3xl font-bold text-foreground md:text-4xl">
-                Ready to Start Your Journey?
+              <div className="mb-4 flex items-center justify-center gap-3">
+                <div className="h-[1px] w-12 bg-gradient-to-r from-transparent to-gold/30" />
+                <span className="text-[10px] tracking-[0.25em] uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                  Join the Archive
+                </span>
+                <div className="h-[1px] w-12 bg-gradient-to-l from-transparent to-gold/30" />
+              </div>
+              
+              <h2 className="mb-4 text-3xl md:text-4xl font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+                Begin Your Journey
               </h2>
-              <p className="mb-8 text-lg text-muted-foreground">
-                Join our community and discover thousands of anime series
+              <p className="mb-8 text-base text-muted-foreground max-w-md mx-auto" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '18px' }}>
+                Enter the sacred archive and discover thousands of anime across every era and genre
               </p>
               <Link
                 to="/login"
-                className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-primary to-purple-600 px-8 py-3 font-semibold text-white shadow-lg shadow-primary/30 transition-all hover:shadow-xl hover:shadow-primary/40"
+                className="btn-imperial min-h-[48px]"
               >
-                Sign Up Now
+                Enter Now
               </Link>
             </div>
           </motion.div>

@@ -8,7 +8,12 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   if (loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <div className="text-center">
+          <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold/30 border-t-crimson mx-auto mb-3" />
+          <p className="text-[10px] text-muted-foreground tracking-[0.2em] uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>
+            Loading...
+          </p>
+        </div>
       </div>
     )
   }
@@ -19,4 +24,3 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
 
   return children
 }
-
