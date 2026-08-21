@@ -1,5 +1,11 @@
 import { supabase } from './supabase';
-import { fetchRanked, type RankedEntry } from './anilist';
+import {
+  fetchMediaById,
+  fetchRanked,
+  searchAnime,
+  type AniListMedia,
+  type RankedEntry,
+} from './anilist';
 
 export interface Anime {
   id: string;
@@ -53,7 +59,10 @@ export async function getAnimeList(filters?: {
     query = query.overlaps('genres', filters.genres);
   }
 
-  const { data, error } = await query.order('rating', { ascending: false });
+  const { data, error } = await query.order('rating', {
+    ascending: false,
+    nullsFirst: false,
+  });
 
   if (error) {
     console.error('Error fetching anime:', error);
@@ -63,19 +72,31 @@ export async function getAnimeList(filters?: {
   return data || [];
 }
 
+/**
+ * One title by id.
+ *
+ * Falls back to AniList when the row isn't in our snapshot, so a suggestion for
+ * a newly announced show still opens instead of landing on "not found".
+ * `.maybeSingle()` rather than `.single()`: the latter treats "no rows" as an
+ * error, which made a miss indistinguishable from a real failure.
+ */
 export async function getAnimeById(id: string): Promise<Anime | null> {
   const { data, error } = await supabase
     .from('anime_index')
     .select('*')
     .eq('id', id)
-    .single();
+    .maybeSingle();
 
-  if (error) {
+  if (error && !import.meta.env.PROD) {
     console.error('Error fetching anime:', error);
-    return null;
   }
+  if (data) return data as Anime;
 
-  return data;
+  const anilistId = Number(String(id).replace(/^anilist-/, ''));
+  if (!Number.isFinite(anilistId) || anilistId <= 0) return null;
+
+  const media = await fetchMediaById(anilistId);
+  return media ? mediaToAnime(media) : null;
 }
 
 export async function getAnimeReviews(animeId: string): Promise<Review[]> {
@@ -155,7 +176,11 @@ async function rankedFallback(
 ): Promise<Anime[]> {
   let q = supabase.from('anime_index').select('*');
   if (status) q = q.eq('status', status);
-  const { data, error } = await q.order('rating', { ascending: false }).limit(limit);
+  // nullsFirst: false — otherwise this fallback fills the homepage sections
+  // with unrated titles whenever the live ranking is unavailable.
+  const { data, error } = await q
+    .order('rating', { ascending: false, nullsFirst: false })
+    .limit(limit);
   if (error) {
     console.error('Error fetching section (fallback):', error);
     return [];
@@ -353,24 +378,319 @@ export async function getEpisodeComments(animeId: string, episodeNumber: number)
   }));
 }
 
-export async function getAnimeSearchSuggestions(query: string, limit: number = 10): Promise<Anime[]> {
-  if (!query || query.trim().length === 0) {
-    return [];
+/**
+ * `%` and `_` are LIKE wildcards, and `\` escapes them. Left raw, a query like
+ * "100%" silently becomes "100<anything>" and matches unrelated rows.
+ */
+function escapeLike(value: string): string {
+  return value.replace(/[\\%_]/g, (c) => `\\${c}`);
+}
+
+/** Comparison form: case/accent-insensitive, punctuation-free, single-spaced. */
+function normaliseTitle(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    // Typographic quotes appear in AniList titles ("Journey's End") but people
+    // type the ASCII apostrophe.
+    .replace(/[’‘`´]/g, "'")
+    .replace(/[^a-z0-9']+/g, ' ')
+    .trim();
+}
+
+/**
+ * Match quality for one spelling of a title, highest first. Rating alone is a
+ * poor sort for a search box: for "one piece" it buried ONE PIECE under ONE
+ * PIECE HEROINES, because the spin-off happened to be rated higher.
+ */
+function spellingScore(spelling: string, normQuery: string, tokens: string[]): number {
+  const t = normaliseTitle(spelling);
+  if (!t) return 0;
+
+  // Word spacing varies between spellings of the same title — "DAN DA DAN" is
+  // typed "dandadan", "Steins;Gate" as "steins gate". Compare with spaces
+  // removed so those still count as exact.
+  const tight = t.replace(/ /g, '');
+  const tightQuery = normQuery.replace(/ /g, '');
+
+  // The gap between "starts with" and "contains as a whole word" is kept
+  // narrow on purpose: both are equally good matches to a reader, the words
+  // just fall in a different place. Leaving it wide let any obscure title
+  // beginning with the query outrank the famous one that merely contains it.
+  let base: number;
+  if (t === normQuery || tight === tightQuery) base = 1000;
+  else if (t.startsWith(normQuery + ' ') || tight.startsWith(tightQuery)) base = 780;
+  else if (t.startsWith(normQuery)) base = 770;
+  else if (new RegExp(`\\b${escapeRegExp(normQuery)}`).test(t)) base = 760;
+  else if (t.includes(normQuery)) base = 600;
+  else {
+    // Words present but not adjacent: "spy family" vs "SPY x FAMILY".
+    // Every word must appear — matching a subset let "K-On!" pull in "Attack
+    // on Titan" on the strength of the word "on" alone.
+    const allPresent = tokens.every((tok) => new RegExp(`\\b${escapeRegExp(tok)}`).test(t));
+    if (!allPresent) return 0;
+    base = 450;
   }
 
-  const { data, error } = await supabase
-    .from('anime_index')
-    .select('id, title, cover_image, genres')
-    .ilike('title', `${query.trim()}%`)
-    .limit(limit)
-    .order('rating', { ascending: false });
+  // How much of the title the query accounts for. Without this, "spy family"
+  // ranked "Street Fighter 6 VS SPY×FAMILY CODE: White" above SPY x FAMILY,
+  // and "mob psycho" put season II above the original — in both cases the
+  // longer title matched just as literally, it was simply mostly other words.
+  const coverage = Math.min(normQuery.length / t.length, 1);
+  return base + coverage * 120;
+}
 
-  if (error) {
-    console.error('Error fetching search suggestions:', error);
-    return [];
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * A row plus every spelling it is known by. The DB stores one collapsed title,
+ * so romaji/native/synonym spellings ride along from AniList — otherwise
+ * "Shingeki no Kyojin" can never rank the row displayed as "Attack on Titan".
+ */
+interface Candidate {
+  row: Anime;
+  spellings: string[];
+  /**
+   * Position in AniList's own SEARCH_MATCH ordering, if it returned this row.
+   * Their relevance engine knows things ours can't — that "kimetsu no yaiba"
+   * means the main series and not the MLB collaboration short.
+   */
+  remoteRank?: number;
+  /** AniList member count. Separates a franchise's main entry from its shorts. */
+  popularity?: number | null;
+}
+
+function rankSuggestions(candidates: Candidate[], query: string, limit: number): Anime[] {
+  const normQuery = normaliseTitle(query);
+  const tokens = normQuery.split(' ').filter(Boolean);
+
+  return candidates
+    .map(({ row, spellings, remoteRank, popularity }) => ({
+      row,
+      // Best-matching spelling wins; a row shouldn't be penalised for the
+      // language it happens to be displayed in.
+      score:
+        Math.max(
+          ...spellings.filter(Boolean).map((s) => spellingScore(s, normQuery, tokens)),
+          0
+        ) +
+        // Kept small: a row that only our own index knows about cannot earn
+        // this at all, so a large bonus would rank by *source* rather than by
+        // how well the title actually matches.
+        (remoteRank !== undefined ? Math.max(0, 50 - remoteRank * 4) : 0) +
+        // Audience size, log-scaled: ~60 points per 10x members. This is the
+        // signal that picks the entry someone typing a franchise name means —
+        // "evangelion" is the TV series, not a promo short whose title happens
+        // to begin with the word. It is wide enough to outweigh the gap
+        // between the near-miss tiers above, but never the 220-point jump to
+        // an exact match, so precision still wins where it exists.
+        (popularity && popularity > 0
+          ? Math.min(Math.log10(popularity) * 60, 320)
+          : 0),
+      rating: typeof row.rating === 'number' ? row.rating : -1,
+      length: (row.title || '').length,
+    }))
+    .filter((entry) => entry.score > 0)
+    .sort(
+      (a, b) =>
+        b.score - a.score || b.rating - a.rating || a.length - b.length
+    )
+    .slice(0, limit)
+    .map((entry) => entry.row);
+}
+
+/** AniList payload shaped into the row type the UI already renders. */
+function mediaToAnime(m: AniListMedia): Anime {
+  return {
+    id: `anilist-${m.id}`,
+    title: m.title.english || m.title.romaji || m.title.native || 'Untitled',
+    rating: m.averageScore != null ? m.averageScore / 10 : null,
+    genres: m.genres ?? [],
+    year: m.year,
+    season: m.season
+      ? m.season.charAt(0) + m.season.slice(1).toLowerCase()
+      : null,
+    status:
+      m.status === 'RELEASING' || m.status === 'HIATUS'
+        ? 'airing'
+        : m.status === 'NOT_YET_RELEASED'
+          ? 'upcoming'
+          : 'completed',
+    episodes: m.episodes,
+    description: m.description?.replace(/<[^>]*>/g, '') ?? null,
+    cover_image: m.coverImage ?? '',
+    banner_image: m.bannerImage,
+    trailer: m.trailer,
+  };
+}
+
+/**
+ * Fandom abbreviations, which neither our titles nor AniList's search resolve —
+ * "jjk" and "snk" both return nothing at all upstream. Only whole-query matches
+ * are expanded, so typing a real title is never rewritten out from under you.
+ */
+const QUERY_ALIASES: Record<string, string> = {
+  aot: 'Attack on Titan',
+  snk: 'Shingeki no Kyojin',
+  jjk: 'Jujutsu Kaisen',
+  kny: 'Kimetsu no Yaiba',
+  mha: 'My Hero Academia',
+  bnha: 'Boku no Hero Academia',
+  fmab: 'Fullmetal Alchemist: Brotherhood',
+  fma: 'Fullmetal Alchemist',
+  nge: 'Neon Genesis Evangelion',
+  tng: 'Tengen Toppa Gurren Lagann',
+  ttgl: 'Tengen Toppa Gurren Lagann',
+  jojo: "JoJo's Bizarre Adventure",
+  ygo: 'Yu-Gi-Oh!',
+  hxh: 'Hunter x Hunter',
+  csm: 'Chainsaw Man',
+  ohshc: 'Ouran High School Host Club',
+  konosuba: 'KonoSuba',
+  rezero: 'Re:Zero',
+  sao: 'Sword Art Online',
+  opm: 'One Punch Man',
+  dbz: 'Dragon Ball Z',
+  pmmm: 'Puella Magi Madoka Magica',
+  'code geass': 'Code Geass',
+  'shield hero': 'The Rising of the Shield Hero',
+};
+
+/** Resolves an abbreviation to its full title, or returns the query unchanged. */
+function expandQuery(query: string): string {
+  const key = normaliseTitle(query).replace(/ /g, '');
+  for (const [alias, full] of Object.entries(QUERY_ALIASES)) {
+    if (alias.replace(/ /g, '') === key) return full;
+  }
+  return query;
+}
+
+/**
+ * Suggestions for the search box.
+ *
+ * Two sources run in parallel and are merged:
+ *   - `anime_index`, matched as a substring on every word of the query. The
+ *     previous prefix-only match (`title ILIKE 'q%'`) meant "titan" returned
+ *     nothing at all, since no title *begins* with it.
+ *   - AniList's own search, which covers english/romaji/native/synonyms and
+ *     titles newer than the last nightly sync.
+ *
+ * Either source failing still yields results from the other; both failing
+ * yields [], never a throw.
+ */
+export async function getAnimeSearchSuggestions(
+  query: string,
+  limit: number = 10
+): Promise<Anime[]> {
+  const raw = query.trim();
+  if (raw.length === 0) return [];
+
+  const q = expandQuery(raw);
+  const tokens = normaliseTitle(q).split(' ').filter(Boolean).slice(0, 6);
+
+  const COLUMNS = 'id, title, cover_image, genres, rating';
+
+  /** Broad pool: every word present somewhere in the title, best-rated first. */
+  const localBroad = (async (): Promise<Anime[]> => {
+    try {
+      let builder = supabase.from('anime_index').select(COLUMNS);
+
+      // Chained ilike filters are ANDed, so "spy family" matches "SPY x FAMILY"
+      // even though the words aren't adjacent.
+      for (const token of tokens.length ? tokens : [q]) {
+        builder = builder.ilike('title', `%${escapeLike(token)}%`);
+      }
+
+      // Over-fetch, then rank locally: the best match is often not the
+      // highest-rated row. `nullsFirst: false` matters because Postgres sorts
+      // DESC as NULLS FIRST, which otherwise fills the list with unrated rows.
+      const { data, error } = await builder
+        .order('rating', { ascending: false, nullsFirst: false })
+        .limit(Math.max(limit * 6, 60));
+
+      if (error) throw error;
+      return (data ?? []) as Anime[];
+    } catch (error) {
+      if (!import.meta.env.PROD) console.error('Local search failed:', error);
+      return [];
+    }
+  })();
+
+  /**
+   * Targeted pool: titles that literally start with the query.
+   *
+   * The broad pool is capped and ordered by rating, so a low-rated exact match
+   * can fall outside it entirely — searching "K-On!" returned Season 2 and the
+   * movie while the original sat below the cut. This guarantees the best
+   * possible match is always among the candidates.
+   */
+  const localPrefix = (async (): Promise<Anime[]> => {
+    try {
+      const { data, error } = await supabase
+        .from('anime_index')
+        .select(COLUMNS)
+        .ilike('title', `${escapeLike(q)}%`)
+        .order('rating', { ascending: false, nullsFirst: false })
+        .limit(12);
+      if (error) throw error;
+      return (data ?? []) as Anime[];
+    } catch {
+      return [];
+    }
+  })();
+
+  // Deliberately wider than `limit`. Only rows AniList returns carry the
+  // popularity and alternate-spelling data the ranker uses, so a narrow
+  // window quietly handicaps everything it left out — asking for 12 meant
+  // "evangelion" never saw Neon Genesis Evangelion at all.
+  const remote = searchAnime(q, Math.max(limit * 2, 25)).catch(() => [] as AniListMedia[]);
+
+  const [broadRows, prefixRows, remoteMedia] = await Promise.all([
+    localBroad,
+    localPrefix,
+    remote,
+  ]);
+  const localRows = [...prefixRows, ...broadRows];
+
+  // Local rows first so the DB copy wins on id collision — it carries the
+  // curated cover art and is guaranteed to open.
+  const merged = new Map<string, Candidate>();
+
+  for (const row of localRows) {
+    if (row?.id && !merged.has(row.id)) {
+      merged.set(row.id, { row, spellings: [row.title] });
+    }
   }
 
-  return data || [];
+  remoteMedia.forEach((media, index) => {
+    const id = `anilist-${media.id}`;
+    const spellings = [
+      media.title.english,
+      media.title.romaji,
+      media.title.native,
+      ...(media.synonyms ?? []),
+    ].filter((s): s is string => !!s);
+
+    const existing = merged.get(id);
+    if (existing) {
+      // Keep the DB row, but let it be found by its other names.
+      existing.spellings.push(...spellings);
+      existing.remoteRank = index;
+      existing.popularity = media.popularity;
+    } else {
+      merged.set(id, {
+        row: mediaToAnime(media),
+        spellings,
+        remoteRank: index,
+        popularity: media.popularity,
+      });
+    }
+  });
+
+  return rankSuggestions([...merged.values()], q, limit);
 }
 
 export async function getAnimeListPaginated(
@@ -403,14 +723,23 @@ export async function getAnimeListPaginated(
   }
 
   if (filters?.query && filters.query.trim()) {
-    query = query.ilike('title', `%${filters.query.trim()}%`);
+    // Same treatment as the suggestion box, so pressing Enter can't show
+    // fewer titles than the dropdown just offered: abbreviations expanded,
+    // wildcards escaped, and each word matched independently.
+    const expanded = expandQuery(filters.query.trim());
+    const words = normaliseTitle(expanded).split(' ').filter(Boolean).slice(0, 6);
+    for (const word of words.length ? words : [expanded]) {
+      query = query.ilike('title', `%${escapeLike(word)}%`);
+    }
   }
 
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
   const { data, error, count } = await query
-    .order('rating', { ascending: false })
+    // Postgres sorts DESC as NULLS FIRST, so without this every result page
+    // led with unrated titles.
+    .order('rating', { ascending: false, nullsFirst: false })
     .range(from, to);
 
   if (error) {
