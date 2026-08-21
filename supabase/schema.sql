@@ -93,9 +93,19 @@ ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Public read anime_index" ON anime_index FOR SELECT USING (true);
 CREATE POLICY "Public read comments" ON comments FOR SELECT USING (true);
 
+-- anime_index is a read-only catalogue. Only scripts/syncAnime.ts writes to it,
+-- and it runs as service_role, which bypasses RLS. Revoking here means the
+-- privilege is absent as well as the row access — production drifted with RLS
+-- switched off, which left the table publicly writable via the anon key.
+REVOKE INSERT, UPDATE, DELETE ON anime_index FROM anon, authenticated;
+
 CREATE POLICY "Users can insert own data" ON users FOR INSERT WITH CHECK (auth.uid() = id);
 CREATE POLICY "Users can update own data" ON users FOR UPDATE USING (auth.uid() = id);
-CREATE POLICY "Users can read own data" ON users FOR SELECT USING (auth.uid() = id OR true);
+-- Profiles are world-readable by design: getAnimeReviews joins users to render
+-- each review author's username and avatar, including for logged-out visitors.
+-- Previously written as `auth.uid() = id OR true`, whose `OR true` made the
+-- predicate unconditionally true while the name implied otherwise.
+CREATE POLICY "Public read profiles" ON users FOR SELECT USING (true);
 
 CREATE POLICY "Users can insert own ratings" ON ratings FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own ratings" ON ratings FOR UPDATE USING (auth.uid() = user_id);
