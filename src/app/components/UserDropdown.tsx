@@ -41,7 +41,7 @@ export function UserDropdown() {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-foreground/80 transition-all hover:bg-accent group"
       >
-        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-crimson to-crimson-dark text-[10px] font-bold text-white border border-gold/10 group-hover:border-gold/20 transition-colors">
+        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-crimson to-crimson-dark text-[10px] font-bold text-ink border border-ink/20 group-hover:border-ink/35 transition-colors">
           {initials}
         </div>
         <ChevronDown className={`h-3.5 w-3.5 text-gold/40 transition-transform duration-300 ${open ? 'rotate-180' : ''}`} />
@@ -54,7 +54,7 @@ export function UserDropdown() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.96 }}
             transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-            className="absolute right-0 top-full z-50 mt-2 w-48 rounded-md border border-gold/10 bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/40"
+            className="absolute right-0 top-full z-50 mt-2 w-48 rounded-md border border-ink/20 bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/40"
           >
             {/* Decorative top line */}
             <div className="h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />

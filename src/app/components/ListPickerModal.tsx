@@ -127,13 +127,13 @@ export default function ListPickerModal({
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.5 }}
-              className="w-full max-w-lg rounded-lg border border-gold/10 bg-card p-5 sm:p-6 shadow-2xl shadow-black/50"
+              className="w-full max-w-lg rounded-lg border border-ink/20 bg-card p-5 sm:p-6 shadow-2xl shadow-black/50"
             >
               {/* Decorative top line */}
               <div className="mb-4 h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
 
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Add to Collection</h2>
+                <h2 className="text-lg text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Add to Collection</h2>
                 <button
                   onClick={onClose}
                   className="rounded-md p-2 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground min-h-[44px] min-w-[44px] flex items-center justify-center"
@@ -143,7 +143,7 @@ export default function ListPickerModal({
               </div>
 
               {!user && (
-                <div className="rounded-md border border-gold/10 bg-background p-4 text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                <div className="rounded-md border border-ink/20 bg-background p-4 text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
                   Enter the archive to manage collections
                 </div>
               )}
@@ -169,7 +169,7 @@ export default function ListPickerModal({
                       ))}
                     </div>
                   ) : lists.length === 0 ? (
-                    <div className="rounded-md border border-dashed border-gold/10 p-8 text-center text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                    <div className="rounded-md border border-dashed border-ink/20 p-8 text-center text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
                       No collections yet
                     </div>
                   ) : (
@@ -183,7 +183,7 @@ export default function ListPickerModal({
                             type="button"
                             disabled={!canInteract || isBusy}
                             onClick={() => addToList(l.id)}
-                            className="flex w-full items-center justify-between gap-3 rounded-md border border-gold/[0.06] bg-background px-4 py-3 text-left transition-all hover:bg-accent hover:border-gold/15 disabled:opacity-50 group"
+                            className="flex w-full items-center justify-between gap-3 rounded-md border border-ink/20 bg-background px-4 py-3 text-left transition-all hover:bg-accent hover:border-ink/35 disabled:opacity-50 group"
                           >
                             <div className="min-w-0">
                               <p className="truncate font-medium text-sm text-foreground group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>{l.name}</p>
@@ -191,7 +191,7 @@ export default function ListPickerModal({
                             </div>
                             <div className="flex items-center gap-2">
                               {isBusy ? (
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-gold/30 border-t-crimson" />
+                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-ink/70 border-t-crimson" />
                               ) : isAdded ? (
                                 <span className="badge-imperial badge-bamboo">
                                   <Check className="h-3 w-3" />

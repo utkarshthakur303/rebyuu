@@ -1,51 +1,55 @@
 /* ═══════════════════════════════════════════════════════════
-   IMPERIAL ANIMATIONS & EFFECTS SYSTEM
-   Cinematic motion design for the Rebyuu platform
+   REBYUU BRUTALIST EFFECTS SYSTEM
+   Paper canvas · ink structure · orange signal.
+
+   Class names are deliberately unchanged from the retired imperial
+   theme — ~90 call sites across 16 files still reference them, so the
+   public API stays fixed while the implementation is swapped wholesale.
+
+   Design rule: this system has NO soft glows. Depth comes from hard
+   offset shadows (`Npx Npx 0`), which is what makes the brutalist
+   surface read as printed matter rather than as glass.
    ═══════════════════════════════════════════════════════════ */
 
-/* ── Noise / Grain Overlay ────────────────────────────── */
+/* ── Paper Grain ──────────────────────────────────────── */
 .grain-overlay::after {
   content: '';
   position: fixed;
   inset: 0;
   z-index: 9999;
   pointer-events: none;
-  opacity: 0.03;
+  opacity: 0.05;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
   background-repeat: repeat;
-  mix-blend-mode: overlay;
+  /* multiply, not overlay — on a light canvas overlay washes the grain out */
+  mix-blend-mode: multiply;
 }
 
-/* ── Brushstroke Divider ─────────────────────────────── */
+/* ── Hazard Stripe ────────────────────────────────────── */
+/* The hero's footer signature, promoted to a reusable rule. */
+.hazard-stripe {
+  height: 14px;
+  width: 100%;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--ink) 0 14px,
+    var(--orange) 14px 28px
+  );
+}
+
+/* ── Divider (was: brushstroke) ───────────────────────── */
 .brush-divider {
   position: relative;
-  height: 2px;
-  background: linear-gradient(
-    90deg,
-    transparent 0%,
-    var(--gold-dark) 15%,
-    var(--gold) 50%,
-    var(--gold-dark) 85%,
-    transparent 100%
+  height: 6px;
+  background-image: repeating-linear-gradient(
+    45deg,
+    var(--ink) 0 8px,
+    var(--orange) 8px 16px
   );
-  opacity: 0.4;
+  opacity: 0.9;
 }
 
-.brush-divider::before,
-.brush-divider::after {
-  content: '◆';
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  font-size: 6px;
-  color: var(--gold);
-  opacity: 0.6;
-}
-
-.brush-divider::before { left: 20%; }
-.brush-divider::after { right: 20%; }
-
-/* ── Section Divider (Torii Gate inspired) ───────────── */
+/* ── Section Divider ──────────────────────────────────── */
 .section-divider {
   display: flex;
   align-items: center;
@@ -57,43 +61,32 @@
 .section-divider::after {
   content: '';
   flex: 1;
-  height: 1px;
-  background: linear-gradient(
-    90deg,
-    transparent,
-    var(--gold-dark),
-    transparent
-  );
-  opacity: 0.3;
+  height: 2px;
+  background: var(--ink);
+  opacity: 0.85;
 }
 
-/* ── Lantern Glow Effect ─────────────────────────────── */
+/* ── Hard Shadow (was: lantern glow) ──────────────────── */
 .lantern-glow {
-  box-shadow:
-    0 0 20px rgba(196, 164, 106, 0.08),
-    0 0 60px rgba(196, 30, 58, 0.04),
-    inset 0 1px 0 rgba(196, 164, 106, 0.06);
+  box-shadow: 4px 4px 0 var(--ink);
 }
 
 .lantern-glow-hover:hover {
-  box-shadow:
-    0 0 30px rgba(196, 164, 106, 0.12),
-    0 0 80px rgba(196, 30, 58, 0.06),
-    inset 0 1px 0 rgba(196, 164, 106, 0.1);
+  box-shadow: 6px 6px 0 var(--orange);
 }
 
-/* ── Gold Border Glow ────────────────────────────────── */
+/* ── Ink Border (was: gold border) ────────────────────── */
 .gold-border {
-  border: 1px solid rgba(196, 164, 106, 0.15);
-  transition: border-color 0.4s ease, box-shadow 0.4s ease;
+  border: 2px solid var(--ink);
+  transition: border-color 0.25s ease, box-shadow 0.25s ease;
 }
 
 .gold-border:hover {
-  border-color: rgba(196, 164, 106, 0.3);
-  box-shadow: 0 0 20px rgba(196, 164, 106, 0.06);
+  border-color: var(--orange-deep);
+  box-shadow: 4px 4px 0 var(--orange);
 }
 
-/* ── Crimson Accent Border ───────────────────────────── */
+/* ── Orange Accent Bar ────────────────────────────────── */
 .crimson-accent {
   position: relative;
 }
@@ -104,9 +97,9 @@
   left: 0;
   top: 0;
   bottom: 0;
-  width: 3px;
-  background: linear-gradient(to bottom, var(--crimson), var(--crimson-dark));
-  border-radius: 0 2px 2px 0;
+  width: 6px;
+  background: var(--orange);
+  border-radius: 0;
 }
 
 /* ── Scroll Reveal Animations ────────────────────────── */
@@ -181,13 +174,10 @@
   50% { transform: translateY(-6px) rotate(1deg); }
 }
 
+/* Pulses the hard shadow rather than a blurred halo. */
 @keyframes pulse-gold {
-  0%, 100% { 
-    box-shadow: 0 0 10px rgba(196, 164, 106, 0.1);
-  }
-  50% { 
-    box-shadow: 0 0 25px rgba(196, 164, 106, 0.2);
-  }
+  0%, 100% { box-shadow: 3px 3px 0 var(--ink); }
+  50% { box-shadow: 6px 6px 0 var(--orange); }
 }
 
 @keyframes shimmer {
@@ -196,13 +186,13 @@
 }
 
 @keyframes ember-drift {
-  0% { 
+  0% {
     transform: translateY(0) translateX(0) scale(1);
     opacity: 0;
   }
-  20% { opacity: 0.6; }
-  80% { opacity: 0.3; }
-  100% { 
+  20% { opacity: 0.8; }
+  80% { opacity: 0.4; }
+  100% {
     transform: translateY(-100px) translateX(20px) scale(0.3);
     opacity: 0;
   }
@@ -244,7 +234,7 @@
   background: linear-gradient(
     90deg,
     transparent 25%,
-    rgba(196, 164, 106, 0.06) 50%,
+    rgba(10, 10, 10, 0.08) 50%,
     transparent 75%
   );
   background-size: 200% 100%;
@@ -255,27 +245,30 @@
   animation: pulse-gold 3s ease-in-out infinite;
 }
 
-/* ── Skeleton Loader (Parchment style) ───────────────── */
+/* ── Skeleton Loader ─────────────────────────────────── */
 .skeleton-imperial {
   background: linear-gradient(
     90deg,
-    var(--ink) 25%,
-    rgba(196, 164, 106, 0.06) 50%,
-    var(--ink) 75%
+    var(--paper-dim) 25%,
+    rgba(10, 10, 10, 0.10) 50%,
+    var(--paper-dim) 75%
   );
   background-size: 200% 100%;
   animation: shimmer 2s ease-in-out infinite;
-  border-radius: var(--radius);
+  border-radius: 0;
+  border: 2px solid var(--ink);
 }
 
-/* ── Card Hover System ───────────────────────────────── */
+/* ── Card ────────────────────────────────────────────── */
 .imperial-card {
   position: relative;
-  background: var(--card);
-  border: 1px solid rgba(196, 164, 106, 0.08);
-  border-radius: var(--radius);
+  background: var(--paper-dim);
+  border: 2px solid var(--ink);
+  border-radius: 0;
   overflow: hidden;
-  transition: all 0.5s cubic-bezier(0.23, 1, 0.32, 1);
+  box-shadow: 4px 4px 0 var(--ink);
+  transition: transform 0.18s cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 0.18s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .imperial-card::before {
@@ -284,29 +277,25 @@
   inset: 0;
   background: linear-gradient(
     135deg,
-    rgba(196, 164, 106, 0.03) 0%,
-    transparent 50%,
-    rgba(196, 30, 58, 0.02) 100%
+    rgba(255, 122, 24, 0.10) 0%,
+    transparent 55%
   );
   opacity: 0;
-  transition: opacity 0.5s ease;
+  transition: opacity 0.25s ease;
   z-index: 1;
   pointer-events: none;
 }
 
 .imperial-card:hover {
-  border-color: rgba(196, 164, 106, 0.2);
-  transform: translateY(-4px);
-  box-shadow:
-    0 20px 60px rgba(0, 0, 0, 0.3),
-    0 0 30px rgba(196, 164, 106, 0.05);
+  transform: translate(-3px, -3px);
+  box-shadow: 8px 8px 0 var(--orange);
 }
 
 .imperial-card:hover::before {
   opacity: 1;
 }
 
-/* ── Imperial Button ─────────────────────────────────── */
+/* ── Primary Button ──────────────────────────────────── */
 .btn-imperial {
   position: relative;
   display: inline-flex;
@@ -314,45 +303,39 @@
   justify-content: center;
   gap: 8px;
   padding: 12px 28px;
-  font-family: 'Outfit', sans-serif;
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: 0.05em;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--parchment);
-  background: linear-gradient(135deg, var(--crimson) 0%, var(--crimson-dark) 100%);
-  border: 1px solid rgba(196, 164, 106, 0.2);
-  border-radius: var(--radius);
+  color: var(--ink);
+  background: var(--orange);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  box-shadow: 4px 4px 0 var(--ink);
   cursor: pointer;
-  overflow: hidden;
-  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-.btn-imperial::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(135deg, transparent 0%, rgba(196, 164, 106, 0.15) 100%);
-  opacity: 0;
-  transition: opacity 0.4s ease;
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
 }
 
 .btn-imperial:hover {
-  transform: translateY(-2px);
-  box-shadow: 
-    0 8px 30px rgba(196, 30, 58, 0.3),
-    0 0 20px rgba(196, 164, 106, 0.08);
-  border-color: rgba(196, 164, 106, 0.35);
+  transform: translate(-2px, -2px);
+  box-shadow: 6px 6px 0 var(--ink);
 }
 
-.btn-imperial:hover::before {
-  opacity: 1;
-}
-
+/* Press = the button physically meets its own shadow. */
 .btn-imperial:active {
-  transform: translateY(0);
+  transform: translate(4px, 4px);
+  box-shadow: 0 0 0 var(--ink);
 }
 
+.btn-imperial:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: 4px 4px 0 var(--ink);
+}
+
+/* ── Outline Button ──────────────────────────────────── */
 .btn-imperial-outline {
   position: relative;
   display: inline-flex;
@@ -360,26 +343,31 @@
   justify-content: center;
   gap: 8px;
   padding: 12px 28px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
   font-weight: 500;
-  font-size: 14px;
-  letter-spacing: 0.04em;
-  color: var(--gold);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink);
   background: transparent;
-  border: 1px solid rgba(196, 164, 106, 0.25);
-  border-radius: var(--radius);
+  border: 2px solid var(--ink);
+  border-radius: 0;
   cursor: pointer;
-  transition: all 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  transition: transform 0.14s ease, box-shadow 0.14s ease, background-color 0.14s ease;
 }
 
 .btn-imperial-outline:hover {
-  background: rgba(196, 164, 106, 0.06);
-  border-color: rgba(196, 164, 106, 0.4);
-  box-shadow: 0 0 20px rgba(196, 164, 106, 0.06);
-  transform: translateY(-1px);
+  background: var(--orange);
+  transform: translate(-2px, -2px);
+  box-shadow: 4px 4px 0 var(--ink);
 }
 
-/* ── Parchment Texture Background ────────────────────── */
+.btn-imperial-outline:active {
+  transform: translate(0, 0);
+  box-shadow: 0 0 0 var(--ink);
+}
+
+/* ── Paper Texture Background ────────────────────────── */
 .parchment-bg {
   position: relative;
 }
@@ -388,62 +376,65 @@
   content: '';
   position: absolute;
   inset: 0;
-  background: 
-    radial-gradient(ellipse at 20% 50%, rgba(196, 164, 106, 0.03) 0%, transparent 50%),
-    radial-gradient(ellipse at 80% 50%, rgba(196, 30, 58, 0.02) 0%, transparent 50%);
+  background:
+    radial-gradient(ellipse at 20% 50%, rgba(255, 122, 24, 0.07) 0%, transparent 55%),
+    radial-gradient(ellipse at 80% 50%, rgba(178, 60, 0, 0.05) 0%, transparent 55%);
   pointer-events: none;
   z-index: 0;
 }
 
-/* ── Scrollbar Styling ───────────────────────────────── */
+/* ── Scrollbar ───────────────────────────────────────── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 10px;
+  height: 10px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--obsidian);
+  background: var(--paper-dim);
+  border-left: 2px solid var(--ink);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(196, 164, 106, 0.2);
-  border-radius: 3px;
+  background: var(--ink);
+  border-radius: 0;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(196, 164, 106, 0.35);
+  background: var(--orange-deep);
 }
 
-/* ── Selection Styling ───────────────────────────────── */
+/* ── Selection ───────────────────────────────────────── */
 ::selection {
-  background: rgba(196, 30, 58, 0.3);
-  color: var(--parchment);
+  background: var(--orange);
+  color: var(--ink);
 }
 
-/* ── Focus Styling ───────────────────────────────────── */
+/* ── Focus ───────────────────────────────────────────── */
 *:focus-visible {
-  outline: 2px solid rgba(196, 164, 106, 0.4);
+  outline: 3px solid var(--orange);
   outline-offset: 2px;
 }
 
-/* ── Ember Particles Container ───────────────────────── */
+/* ── Ember Particles ─────────────────────────────────── */
 .ember-particle {
   position: absolute;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--gold);
+  width: 4px;
+  height: 4px;
+  /* square, not round — no soft shapes in this system */
+  border-radius: 0;
+  background: var(--orange);
   animation: ember-drift 4s ease-out infinite;
   pointer-events: none;
 }
 
-/* ── Hero Gradient Overlays ──────────────────────────── */
+/* ── Key-art Scrims ──────────────────────────────────── */
+/* Fades now resolve to paper, not to the retired near-black canvas. */
 .hero-gradient-left {
   background: linear-gradient(
     to right,
-    var(--background) 0%,
-    rgba(8, 8, 8, 0.95) 20%,
-    rgba(8, 8, 8, 0.7) 50%,
+    var(--paper) 0%,
+    rgba(237, 235, 228, 0.95) 20%,
+    rgba(237, 235, 228, 0.7) 50%,
     transparent 100%
   );
 }
@@ -451,8 +442,8 @@
 .hero-gradient-bottom {
   background: linear-gradient(
     to top,
-    var(--background) 0%,
-    rgba(8, 8, 8, 0.8) 30%,
+    var(--paper) 0%,
+    rgba(237, 235, 228, 0.85) 30%,
     transparent 100%
   );
 }
@@ -460,84 +451,92 @@
 .hero-gradient-cinematic {
   background: linear-gradient(
     to top,
-    var(--background) 0%,
-    rgba(8, 8, 8, 0.9) 15%,
-    rgba(8, 8, 8, 0.5) 40%,
-    rgba(196, 30, 58, 0.05) 70%,
+    var(--paper) 0%,
+    rgba(237, 235, 228, 0.92) 15%,
+    rgba(237, 235, 228, 0.55) 40%,
+    rgba(255, 122, 24, 0.10) 70%,
     transparent 100%
   );
 }
 
-/* ── Badge Styles ────────────────────────────────────── */
+/* ── Badges ──────────────────────────────────────────── */
 .badge-imperial {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   padding: 4px 10px;
-  font-family: 'Outfit', sans-serif;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.08em;
+  font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
-  border-radius: 2px;
-  border: 1px solid rgba(196, 164, 106, 0.2);
-  background: rgba(196, 164, 106, 0.06);
-  color: var(--gold);
+  border-radius: 0;
+  border: 2px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
 }
 
 .badge-crimson {
-  border-color: rgba(196, 30, 58, 0.3);
-  background: rgba(196, 30, 58, 0.1);
-  color: var(--crimson-light);
+  border-color: var(--ink);
+  background: var(--orange);
+  color: var(--ink);
 }
 
 .badge-bamboo {
-  border-color: rgba(107, 143, 113, 0.3);
-  background: rgba(107, 143, 113, 0.1);
-  color: var(--bamboo);
+  border-color: var(--ink);
+  background: var(--mint);
+  color: var(--ink);
 }
 
-/* ── Imperial Input ──────────────────────────────────── */
+/* ── Input ───────────────────────────────────────────── */
+/* Padding is split into a :where() rule (zero specificity) so callers can pass
+   Tailwind utilities like `pl-10` to make room for a leading icon. As a plain
+   `.input-imperial { padding }` it loaded after Tailwind and silently beat
+   `pl-10`, leaving field icons overlapping their placeholder text. */
+:where(.input-imperial) {
+  padding: 12px 16px;
+}
+
 .input-imperial {
   width: 100%;
-  padding: 12px 16px;
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Outfit', ui-sans-serif, sans-serif;
   font-size: 15px;
-  color: var(--foreground);
-  background: var(--input-background);
-  border: 1px solid rgba(196, 164, 106, 0.1);
-  border-radius: var(--radius);
-  transition: all 0.3s ease;
+  color: var(--ink);
+  background: var(--paper);
+  border: 2px solid var(--ink);
+  border-radius: 0;
+  transition: box-shadow 0.16s ease, border-color 0.16s ease;
 }
 
 .input-imperial::placeholder {
   color: var(--muted-foreground);
-  font-style: italic;
+  font-style: normal;
+  letter-spacing: 0.02em;
 }
 
 .input-imperial:focus {
   outline: none;
-  border-color: rgba(196, 164, 106, 0.3);
-  box-shadow: 
-    0 0 0 3px rgba(196, 164, 106, 0.06),
-    0 0 20px rgba(196, 164, 106, 0.04);
+  border-color: var(--ink);
+  box-shadow: 4px 4px 0 var(--orange);
 }
 
 /* ── Rating Stars ────────────────────────────────────── */
 .star-gold {
-  color: var(--gold);
-  fill: var(--gold);
-  filter: drop-shadow(0 0 4px rgba(196, 164, 106, 0.3));
+  color: var(--orange);
+  fill: var(--orange);
+  /* flat fill — the old drop-shadow glow belongs to the retired theme */
+  filter: none;
 }
 
 /* ── Swiper Overrides ────────────────────────────────── */
 .swiper-pagination-bullet {
-  background: var(--gold-dark) !important;
-  opacity: 0.4 !important;
+  background: var(--ink) !important;
+  border-radius: 0 !important;
+  opacity: 0.25 !important;
 }
 
 .swiper-pagination-bullet-active {
-  background: var(--crimson) !important;
+  background: var(--orange) !important;
   opacity: 1 !important;
 }
 
@@ -548,13 +547,11 @@
   }
 }
 
-/* ── Responsive Utilities ────────────────────────────── */
+/* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 768px) {
-  .imperial-card:hover {
-    transform: none;
-  }
-  
-  .btn-imperial:hover {
+  .imperial-card:hover,
+  .btn-imperial:hover,
+  .btn-imperial-outline:hover {
     transform: none;
   }
 }

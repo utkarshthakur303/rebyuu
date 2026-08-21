@@ -57,15 +57,15 @@ export class ErrorBoundary extends Component<Props, State> {
 
       return (
         <div className="flex min-h-screen items-center justify-center bg-background p-4">
-          <div className="max-w-md rounded-lg border border-gold/10 bg-card p-8 text-center shadow-2xl shadow-black/30">
+          <div className="max-w-md rounded-lg border border-ink/20 bg-card p-8 text-center shadow-2xl shadow-black/30">
             {/* Decorative top line */}
             <div className="mb-6 h-[1px] bg-gradient-to-r from-transparent via-crimson/30 to-transparent" />
             
             <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-crimson/70" />
-            <h2 className="mb-2 text-xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+            <h2 className="mb-2 text-xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
               Something went wrong
             </h2>
-            <p className="mb-6 text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+            <p className="mb-6 text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
               {import.meta.env.DEV && this.state.error
                 ? this.state.error.message
                 : 'An unexpected disturbance has occurred. Please try again.'}

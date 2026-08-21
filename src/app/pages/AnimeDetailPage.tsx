@@ -8,6 +8,7 @@ import { supabase } from '@/services/supabase';
 import { EpisodeModal } from '@/app/components/EpisodeModal';
 import ListPickerModal from '@/app/components/ListPickerModal';
 import { toast } from 'sonner';
+import { useAnimeTitle } from '@/context/TitleLangContext';
 
 export default function AnimeDetailPage() {
   const { id } = useParams();
@@ -21,6 +22,7 @@ export default function AnimeDetailPage() {
   const [showListPicker, setShowListPicker] = useState(false);
   const animeRef = useRef<Anime | null>(null);
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
+  const displayTitle = useAnimeTitle(anime);
 
   const loadAnime = useCallback(async (animeId: string) => {
     if (!animeId) return;
@@ -84,7 +86,7 @@ export default function AnimeDetailPage() {
     return (
       <div className="flex min-h-screen items-center justify-center">
         <div className="text-center">
-          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-gold/30 border-t-crimson mb-3" />
+          <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-ink/70 border-t-crimson mb-3" />
           <p className="text-xs text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>Loading...</p>
         </div>
       </div>
@@ -94,7 +96,7 @@ export default function AnimeDetailPage() {
   if (!loading && !anime) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>This entry was not found in the archive</p>
+        <p className="text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>This entry was not found in the archive</p>
       </div>
     );
   }
@@ -202,14 +204,16 @@ export default function AnimeDetailPage() {
         {/* Multi-layer gradients */}
         <div className="absolute inset-0 bg-gradient-to-r from-background via-background/70 to-transparent" style={{ zIndex: 0 }} />
         <div className="hero-gradient-cinematic absolute inset-0" style={{ zIndex: 1 }} />
-        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(8,8,8,0.5) 100%)', zIndex: 1 }} />
+        {/* Vignette resolves to paper so the banner dissolves into the page;
+            fading to the retired near-black would fight .hero-gradient-cinematic. */}
+        <div className="absolute inset-0" style={{ background: 'radial-gradient(ellipse at center, transparent 30%, rgba(237,235,228,0.55) 100%)', zIndex: 1 }} />
         
         {/* Back button */}
         <div className="absolute inset-0 flex items-end" style={{ zIndex: 2 }}>
           <div className="mx-auto w-full max-w-7xl px-4 pb-4 sm:pb-6 md:pb-8 sm:px-6 lg:px-8">
             <Link
               to="/browse"
-              className="mb-2 sm:mb-4 inline-flex items-center gap-2 rounded-md bg-black/50 px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-medium tracking-wider uppercase text-white/80 backdrop-blur-sm transition-all hover:bg-black/70 border border-gold/10 hover:border-gold/20"
+              className="mb-2 sm:mb-4 inline-flex items-center gap-2 rounded-md bg-black/50 px-3 py-1.5 sm:px-4 sm:py-2 text-[10px] sm:text-xs font-medium tracking-wider uppercase text-white/80 backdrop-blur-sm transition-all hover:bg-black/70 border border-ink/20 hover:border-ink/35"
               style={{ fontFamily: 'Outfit, sans-serif' }}
             >
               <ArrowLeft className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
@@ -237,12 +241,12 @@ export default function AnimeDetailPage() {
                 <img
                   src={anime.cover_image}
                   alt={anime?.title || 'Anime'}
-                  className="h-56 w-40 sm:h-64 sm:w-44 md:h-72 md:w-52 lg:h-80 lg:w-56 rounded-md border-2 border-gold/10 object-cover shadow-2xl shadow-black/50"
+                  className="h-56 w-40 sm:h-64 sm:w-44 md:h-72 md:w-52 lg:h-80 lg:w-56 rounded-md border-2 border-ink/20 object-cover shadow-2xl shadow-black/50"
                   loading="lazy"
                   decoding="async"
                 />
               ) : (
-                <div className="h-56 w-40 sm:h-64 sm:w-44 md:h-72 md:w-52 lg:h-80 lg:w-56 rounded-md border-2 border-gold/10 bg-gradient-to-br from-crimson/30 to-ink shadow-2xl" />
+                <div className="h-56 w-40 sm:h-64 sm:w-44 md:h-72 md:w-52 lg:h-80 lg:w-56 rounded-md border-2 border-ink/20 bg-gradient-to-br from-crimson/30 to-ink shadow-2xl" />
               )}
             </motion.div>
           </div>
@@ -254,8 +258,8 @@ export default function AnimeDetailPage() {
             transition={{ duration: 0.6, delay: 0.1, ease: [0.23, 1, 0.32, 1] }}
             className="flex-1 pt-4 sm:pt-6 lg:pt-0 order-1 lg:order-2"
           >
-            <h1 className="mb-3 sm:mb-4 text-xl sm:text-2xl md:text-3xl lg:text-4xl font-bold text-foreground leading-tight" style={{ fontFamily: 'Cinzel, serif' }}>
-              {anime?.title || 'Loading...'}
+            <h1 className="mb-3 sm:mb-4 text-xl sm:text-2xl md:text-3xl lg:text-4xl text-foreground leading-tight" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
+              {displayTitle || 'Loading...'}
             </h1>
 
             <div className="mb-3 sm:mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
@@ -296,7 +300,7 @@ export default function AnimeDetailPage() {
               {anime?.genres?.map((genre) => (
                 <span
                   key={genre}
-                  className="rounded-sm border border-gold/15 bg-gold/5 px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-gold/70"
+                  className="rounded-sm border border-ink/35 bg-gold/5 px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-gold/70"
                   style={{ fontFamily: 'Outfit, sans-serif' }}
                 >
                   {genre}
@@ -305,7 +309,7 @@ export default function AnimeDetailPage() {
             </div>
 
             {anime?.description && (
-              <p className="mb-5 sm:mb-6 text-sm text-muted-foreground leading-relaxed" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '16px', lineHeight: '1.7' }}>
+              <p className="mb-5 sm:mb-6 text-sm text-muted-foreground leading-relaxed" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontSize: '16px', lineHeight: '1.7' }}>
                 {anime.description}
               </p>
             )}
@@ -344,13 +348,13 @@ export default function AnimeDetailPage() {
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
               id="trailer"
-              className="rounded-lg border border-gold/[0.08] bg-card p-4 sm:p-6"
+              className="rounded-lg border border-ink/20 bg-card p-4 sm:p-6"
             >
-              <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Trailer</h2>
-              <div className="aspect-video overflow-hidden rounded-md border border-gold/[0.06] bg-background">
+              <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Trailer</h2>
+              <div className="aspect-video overflow-hidden rounded-md border border-ink/20 bg-background">
                 <iframe
                   src={anime?.trailer?.replace('watch?v=', 'embed/') || ''}
-                  title={`${anime?.title || 'Anime'} trailer`}
+                  title={`${displayTitle || 'Anime'} trailer`}
                   className="h-full w-full"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
@@ -367,7 +371,7 @@ export default function AnimeDetailPage() {
               viewport={{ once: true }}
               transition={{ duration: 0.5 }}
             >
-              <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Episodes</h2>
+              <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Episodes</h2>
               <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
                 {Array.from({ length: anime?.episodes || 0 }, (_, i) => {
                   const episodeNum = i + 1;
@@ -375,7 +379,7 @@ export default function AnimeDetailPage() {
                     <button
                       key={episodeNum}
                       onClick={() => setSelectedEpisode(episodeNum)}
-                      className="flex items-center gap-3 sm:gap-4 rounded-md border border-gold/[0.06] bg-card p-3 sm:p-4 text-left transition-all hover:border-gold/15 hover:shadow-lg hover:shadow-black/20 min-h-[60px] sm:min-h-[70px] group"
+                      className="flex items-center gap-3 sm:gap-4 rounded-md border border-ink/20 bg-card p-3 sm:p-4 text-left transition-all hover:border-ink/35 hover:shadow-lg hover:shadow-black/20 min-h-[60px] sm:min-h-[70px] group"
                     >
                       <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-md bg-crimson/10 text-sm font-bold text-crimson group-hover:bg-crimson/15 transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
                         {episodeNum}
@@ -398,10 +402,10 @@ export default function AnimeDetailPage() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Reviews</h2>
+            <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Reviews</h2>
 
             {user && (
-              <form onSubmit={handleSubmitReview} className="mb-4 sm:mb-6 rounded-lg border border-gold/[0.08] bg-card p-4 sm:p-5 md:p-6">
+              <form onSubmit={handleSubmitReview} className="mb-4 sm:mb-6 rounded-lg border border-ink/20 bg-card p-4 sm:p-5 md:p-6">
               <h3 className="mb-3 sm:mb-4 text-sm font-semibold tracking-wider uppercase text-foreground/80" style={{ fontFamily: 'Outfit, sans-serif' }}>Write a Review</h3>
               
               <div className="mb-3 sm:mb-4">
@@ -414,8 +418,8 @@ export default function AnimeDetailPage() {
                       onClick={() => setUserRating(rating)}
                       className={`flex h-10 w-10 items-center justify-center rounded-md border text-sm transition-all min-h-[44px] min-w-[44px] ${
                         userRating >= rating
-                          ? 'border-crimson bg-crimson text-white'
-                          : 'border-gold/10 bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
+                          ? 'border-crimson bg-crimson text-ink'
+                          : 'border-ink/20 bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
                       }`}
                       style={{ fontFamily: 'Outfit, sans-serif' }}
                     >
@@ -451,29 +455,29 @@ export default function AnimeDetailPage() {
             )}
 
             {!user && (
-              <div className="mb-6 rounded-lg border border-gold/[0.06] bg-card p-6 text-center">
-                <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>Please enter the archive to write a review</p>
+              <div className="mb-6 rounded-lg border border-ink/20 bg-card p-6 text-center">
+                <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>Please enter the archive to write a review</p>
               </div>
             )}
 
             <div className="space-y-3">
               {reviews.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-gold/10 bg-card p-8 text-center">
-                  <p className="text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>No reviews yet. Be the first to share your thoughts.</p>
+                <div className="rounded-lg border border-dashed border-ink/20 bg-card p-8 text-center">
+                  <p className="text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>No reviews yet. Be the first to share your thoughts.</p>
                 </div>
               ) : (
                 reviews.map((reviewItem) => (
-                  <div key={reviewItem.id} className="rounded-lg border border-gold/[0.06] bg-card p-4 sm:p-5 break-words">
+                  <div key={reviewItem.id} className="rounded-lg border border-ink/20 bg-card p-4 sm:p-5 break-words">
                     <div className="mb-3 flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         {reviewItem.user.avatar_url ? (
                           <img
                             src={reviewItem.user.avatar_url}
                             alt={reviewItem.user.username}
-                            className="h-9 w-9 rounded-full object-cover border border-gold/10"
+                            className="h-9 w-9 rounded-full object-cover border border-ink/20"
                           />
                         ) : (
-                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-crimson/20 to-crimson/10 font-semibold text-crimson text-xs border border-crimson/10">
+                          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-crimson/20 to-crimson/10 font-semibold text-crimson text-xs border border-orange/70">
                             {reviewItem.user.username.charAt(0)}
                           </div>
                         )}
@@ -486,7 +490,7 @@ export default function AnimeDetailPage() {
                       </div>
                       <div className="flex items-center gap-2">
                         {reviewItem.rating > 0 && (
-                          <div className="flex items-center gap-1 rounded-md bg-crimson/10 px-2 py-1 border border-crimson/15">
+                          <div className="flex items-center gap-1 rounded-md bg-crimson/10 px-2 py-1 border border-orange/70">
                             <Star className="h-3 w-3 fill-crimson text-crimson" />
                             <span className="font-semibold text-xs text-crimson" style={{ fontFamily: 'Outfit, sans-serif' }}>{reviewItem.rating}</span>
                           </div>
@@ -537,7 +541,7 @@ export default function AnimeDetailPage() {
           onClose={() => setSelectedEpisode(null)}
           animeId={anime?.id || ''}
           episodeNumber={selectedEpisode || 0}
-          animeTitle={anime?.title || ''}
+          animeTitle={displayTitle || ''}
         />
       )}
       <ListPickerModal

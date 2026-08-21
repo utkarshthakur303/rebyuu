@@ -156,11 +156,11 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
             initial={{ opacity: 0, scale: 0.95, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.95, y: 20 }}
-            className="fixed inset-0 sm:left-1/2 sm:top-1/2 sm:right-auto sm:bottom-auto sm:inset-auto z-50 max-h-[100vh] sm:max-h-[90vh] w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 overflow-y-auto rounded-none sm:rounded-lg border-0 sm:border border-gold/10 bg-background shadow-2xl shadow-black/50 sm:mx-4"
+            className="fixed inset-0 sm:left-1/2 sm:top-1/2 sm:right-auto sm:bottom-auto sm:inset-auto z-50 max-h-[100vh] sm:max-h-[90vh] w-full sm:max-w-2xl sm:-translate-x-1/2 sm:-translate-y-1/2 overflow-y-auto rounded-none sm:rounded-lg border-0 sm:border border-ink/20 bg-background shadow-2xl shadow-black/50 sm:mx-4"
           >
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-gold/10 bg-background p-4 sm:p-6">
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-ink/20 bg-background p-4 sm:p-6">
               <div className="min-w-0 flex-1">
-                <h2 className="text-xl sm:text-2xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+                <h2 className="text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
                   Episode {episodeNumber}
                 </h2>
                 <p className="text-xs text-muted-foreground truncate" style={{ fontFamily: 'Outfit, sans-serif' }}>{animeTitle}</p>
@@ -188,8 +188,8 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                           onClick={() => setRating(r)}
                           className={`flex h-10 w-10 items-center justify-center rounded-md border text-sm transition-all min-h-[44px] min-w-[44px] ${
                             rating >= r
-                              ? 'border-crimson bg-crimson text-white'
-                              : 'border-gold/10 bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
+                              ? 'border-crimson bg-crimson text-ink'
+                              : 'border-ink/20 bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
                           }`}
                           style={{ fontFamily: 'Outfit, sans-serif' }}
                         >
@@ -284,8 +284,8 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
               )}
 
               {!user && (
-                <div className="rounded-md border border-gold/10 bg-card p-4 text-center">
-                  <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                <div className="rounded-md border border-ink/20 bg-card p-4 text-center">
+                  <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
                     Enter the archive to rate and comment on episodes
                   </p>
                 </div>
@@ -294,7 +294,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
               <div>
                 <div className="mb-4 flex items-center gap-2">
                   <MessageSquare className="h-4 w-4 text-crimson" />
-                  <h3 className="text-base font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+                  <h3 className="text-base text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
                     Comments ({comments.length})
                   </h3>
                 </div>
@@ -308,23 +308,23 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
                     ))}
                   </div>
                 ) : comments.length === 0 ? (
-                  <p className="text-center text-sm text-muted-foreground py-8" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                  <p className="text-center text-sm text-muted-foreground py-8" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
                     No comments yet. Be the first to comment!
                   </p>
                 ) : (
                   <div className="space-y-3">
                     {comments.map((c) => (
-                      <div key={c.id} className="rounded-md border border-gold/[0.06] bg-card p-4">
+                      <div key={c.id} className="rounded-md border border-ink/20 bg-card p-4">
                         <div className="mb-2 flex items-center justify-between">
                           <div className="flex items-center gap-3">
                             {c.user.avatar_url ? (
                               <img
                                 src={c.user.avatar_url}
                                 alt={c.user.username}
-                                className="h-8 w-8 rounded-full object-cover border border-gold/10"
+                                className="h-8 w-8 rounded-full object-cover border border-ink/20"
                               />
                             ) : (
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-crimson/10">
+                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-orange/70">
                                 {c.user.username.charAt(0)}
                               </div>
                             )}

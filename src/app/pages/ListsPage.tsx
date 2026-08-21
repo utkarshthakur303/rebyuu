@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/services/supabase'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
+import { AnimeTitleText } from '@/context/TitleLangContext'
 
 type ListRow = {
   id: string
@@ -177,7 +178,7 @@ export default function ListsPage() {
           <div className="flex items-start gap-3">
             <div className="hidden sm:block h-10 w-[3px] rounded-full bg-gradient-to-b from-crimson via-crimson/50 to-transparent mt-1 shrink-0" />
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Collections</h1>
+              <h1 className="text-2xl sm:text-3xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Collections</h1>
               <p className="mt-1 text-xs tracking-[0.1em] uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>Create and manage your anime collections</p>
             </div>
           </div>
@@ -188,10 +189,10 @@ export default function ListsPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.05 }}
           onSubmit={createList}
-          className="mb-8 rounded-lg border border-gold/[0.08] bg-card p-5 sm:p-6"
+          className="mb-8 rounded-lg border border-ink/20 bg-card p-5 sm:p-6"
         >
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Create Collection</h2>
+            <h2 className="text-base text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Create Collection</h2>
             <button
               type="submit"
               disabled={!canCreate}
@@ -250,11 +251,11 @@ export default function ListsPage() {
           className="space-y-3"
         >
           {loading ? (
-            <div className="flex items-center justify-center rounded-lg border border-gold/[0.06] bg-card py-16">
-              <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold/30 border-t-crimson" />
+            <div className="flex items-center justify-center rounded-lg border border-ink/20 bg-card py-16">
+              <div className="h-6 w-6 animate-spin rounded-full border-2 border-ink/70 border-t-crimson" />
             </div>
           ) : lists.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-gold/10 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+            <div className="rounded-lg border border-dashed border-ink/20 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
               No collections yet — create your first one above
             </div>
           ) : (
@@ -266,11 +267,11 @@ export default function ListsPage() {
                   initial={{ opacity: 0, y: 8 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.25, delay: idx * 0.03 }}
-                  className="rounded-lg border border-gold/[0.06] bg-card p-5 sm:p-6"
+                  className="rounded-lg border border-ink/20 bg-card p-5 sm:p-6"
                 >
                   <div className="flex items-start justify-between gap-4 mb-4">
                     <div className="flex-1">
-                      <h3 className="text-base font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>{list.name}</h3>
+                      <h3 className="text-base text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>{list.name}</h3>
                       {list.description && <p className="mt-1 text-xs text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{list.description}</p>}
                       <p className="mt-2 text-[10px] text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>
                         {items.length} {items.length === 1 ? 'entry' : 'entries'}
@@ -296,26 +297,26 @@ export default function ListsPage() {
                   </div>
                   
                   {items.length > 0 && (
-                    <div className="mt-4 pt-4 border-t border-gold/[0.06]">
+                    <div className="mt-4 pt-4 border-t border-ink/20">
                       <div className="grid gap-2 sm:grid-cols-2">
                         {items.slice(0, 4).map((item) => (
                           <Link
                             key={item.id}
                             to={`/anime/${item.anime_id}`}
-                            className="flex items-center gap-3 rounded-md border border-gold/[0.06] bg-background p-3 transition-all hover:bg-accent hover:border-gold/15 group"
+                            className="flex items-center gap-3 rounded-md border border-ink/20 bg-background p-3 transition-all hover:bg-accent hover:border-ink/35 group"
                           >
                             {item.anime?.cover_image ? (
                               <img
                                 src={item.anime.cover_image}
                                 alt={item.anime.title}
-                                className="h-14 w-10 rounded-sm object-cover border border-gold/[0.06]"
+                                className="h-14 w-10 rounded-sm object-cover border border-ink/20"
                               />
                             ) : (
                               <div className="h-14 w-10 rounded-sm bg-gradient-to-br from-crimson/20 to-ink" />
                             )}
                             <div className="flex-1 min-w-0">
                               <p className="truncate font-medium text-sm text-foreground group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                                {item.anime?.title || 'Unknown'}
+                                <AnimeTitleText anime={item.anime} fallback="Unknown" />
                               </p>
                             </div>
                           </Link>

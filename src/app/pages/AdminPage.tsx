@@ -93,25 +93,25 @@ export default function AdminPage() {
           className="mb-8"
         >
           <div className="mb-6 flex items-center gap-3">
-            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-crimson/10 border border-crimson/15">
+            <div className="flex h-12 w-12 items-center justify-center rounded-md bg-crimson/10 border border-orange/70">
               <Shield className="h-6 w-6 text-crimson" />
             </div>
             <div>
-              <h1 className="text-2xl sm:text-3xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Governance</h1>
+              <h1 className="text-2xl sm:text-3xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Governance</h1>
               <p className="text-xs text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>Moderate comments and content</p>
             </div>
           </div>
 
           {/* Stats */}
           <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border border-gold/[0.06] bg-card p-5">
+            <div className="rounded-md border border-ink/20 bg-card p-5">
               <div className="mb-2 flex items-center gap-2">
                 <AlertCircle className="h-4 w-4 text-destructive" />
                 <span className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Reported</span>
               </div>
               <p className="text-2xl font-bold text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{reportedCount}</p>
             </div>
-            <div className="rounded-md border border-gold/[0.06] bg-card p-5">
+            <div className="rounded-md border border-ink/20 bg-card p-5">
               <div className="mb-2 flex items-center gap-2">
                 <Check className="h-4 w-4 text-bamboo" />
                 <span className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Resolved</span>
@@ -120,7 +120,7 @@ export default function AdminPage() {
                 {comments.length - reportedCount}
               </p>
             </div>
-            <div className="rounded-md border border-gold/[0.06] bg-card p-5">
+            <div className="rounded-md border border-ink/20 bg-card p-5">
               <div className="mb-2 flex items-center gap-2">
                 <Shield className="h-4 w-4 text-crimson" />
                 <span className="text-[10px] font-medium tracking-wider uppercase text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Total</span>
@@ -136,8 +136,8 @@ export default function AdminPage() {
             onClick={() => setFilter('reported')}
             className={`rounded-md px-4 py-2 text-xs font-medium tracking-wider uppercase transition-all min-h-[40px] ${
               filter === 'reported'
-                ? 'bg-crimson text-white shadow-lg shadow-crimson/20'
-                : 'border border-gold/10 bg-transparent text-foreground hover:bg-accent'
+                ? 'bg-crimson text-ink shadow-lg shadow-crimson/20'
+                : 'border border-ink/20 bg-transparent text-foreground hover:bg-accent'
             }`}
             style={{ fontFamily: 'Outfit, sans-serif' }}
           >
@@ -147,8 +147,8 @@ export default function AdminPage() {
             onClick={() => setFilter('all')}
             className={`rounded-md px-4 py-2 text-xs font-medium tracking-wider uppercase transition-all min-h-[40px] ${
               filter === 'all'
-                ? 'bg-crimson text-white shadow-lg shadow-crimson/20'
-                : 'border border-gold/10 bg-transparent text-foreground hover:bg-accent'
+                ? 'bg-crimson text-ink shadow-lg shadow-crimson/20'
+                : 'border border-ink/20 bg-transparent text-foreground hover:bg-accent'
             }`}
             style={{ fontFamily: 'Outfit, sans-serif' }}
           >
@@ -161,12 +161,12 @@ export default function AdminPage() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.3 }}
-          className="overflow-hidden rounded-md border border-gold/[0.06] bg-card"
+          className="overflow-hidden rounded-md border border-ink/20 bg-card"
         >
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="border-b border-gold/[0.06] bg-ink/30">
+                <tr className="border-b border-ink/20 bg-ink/10">
                   <th className="px-5 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>User</th>
                   <th className="px-5 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>Comment</th>
                   <th className="px-5 py-3 text-left text-[10px] font-semibold tracking-wider uppercase text-gold/50" style={{ fontFamily: 'Outfit, sans-serif' }}>Date</th>
@@ -178,13 +178,13 @@ export default function AdminPage() {
                 {loading ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center">
-                      <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-gold/30 border-t-crimson" />
+                      <div className="inline-block h-5 w-5 animate-spin rounded-full border-2 border-ink/70 border-t-crimson" />
                     </td>
                   </tr>
                 ) : comments.length === 0 ? (
                   <tr>
                     <td colSpan={5} className="px-6 py-12 text-center">
-                      <p className="text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>No entries to display</p>
+                      <p className="text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>No entries to display</p>
                     </td>
                   </tr>
                 ) : (
@@ -198,7 +198,7 @@ export default function AdminPage() {
                     >
                       <td className="px-5 py-4">
                         <div className="flex items-center gap-3">
-                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-crimson/10">
+                          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-orange/70">
                             {comment.user?.username?.charAt(0) || '?'}
                           </div>
                           <span className="font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{comment.user?.username || 'Unknown'}</span>
@@ -230,7 +230,7 @@ export default function AdminPage() {
                           {comment.reported && (
                             <button
                               onClick={() => handleIgnore(comment.id)}
-                              className="rounded-md border border-gold/10 bg-transparent px-3 py-1.5 text-[10px] font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-gold/20"
+                              className="rounded-md border border-ink/20 bg-transparent px-3 py-1.5 text-[10px] font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-ink/35"
                               style={{ fontFamily: 'Outfit, sans-serif' }}
                             >
                               Ignore

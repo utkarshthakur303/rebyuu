@@ -4,6 +4,7 @@ import { motion } from 'motion/react'
 import { Link, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { CreateListModal } from '@/app/components/CreateListModal'
+import { AnimeTitleText } from '@/context/TitleLangContext'
 import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/services/supabase'
 
@@ -198,7 +199,7 @@ export default function ProfilePage() {
   if (loadingProfile) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold/30 border-t-crimson" />
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-ink/70 border-t-crimson" />
       </div>
     )
   }
@@ -206,7 +207,7 @@ export default function ProfilePage() {
   if (!profile) {
     return (
       <div className="flex min-h-screen items-center justify-center">
-        <p className="text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>Profile not found</p>
+        <p className="text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>Profile not found</p>
       </div>
     )
   }
@@ -221,14 +222,14 @@ export default function ProfilePage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: [0.23, 1, 0.32, 1] }}
-          className="mb-8 rounded-lg border border-gold/[0.08] bg-card p-6 sm:p-8"
+          className="mb-8 rounded-lg border border-ink/20 bg-card p-6 sm:p-8"
         >
           <div className="flex flex-col gap-6 md:flex-row md:items-start">
             <div className="relative">
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt={displayName} className="h-20 w-20 sm:h-24 sm:w-24 rounded-full object-cover border-2 border-gold/15 shadow-lg shadow-black/30" />
+                <img src={profile.avatar_url} alt={displayName} className="h-20 w-20 sm:h-24 sm:w-24 rounded-full object-cover border-2 border-ink/35 shadow-lg shadow-black/30" />
               ) : (
-                <div className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-gradient-to-br from-crimson to-crimson-dark text-2xl sm:text-3xl font-bold text-white border-2 border-gold/15 shadow-lg shadow-black/30" style={{ fontFamily: 'Cinzel, serif' }}>
+                <div className="flex h-20 w-20 sm:h-24 sm:w-24 items-center justify-center rounded-full bg-gradient-to-br from-crimson to-crimson-dark text-2xl sm:text-3xl text-ink border-2 border-ink/35 shadow-lg shadow-black/30" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
                   {initials}
                 </div>
               )}
@@ -236,7 +237,7 @@ export default function ProfilePage() {
 
             <div className="flex-1">
               <div className="mb-2 flex items-center gap-2 sm:gap-3">
-                <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>{displayName}</h1>
+                <h1 className="text-xl sm:text-2xl md:text-3xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>{displayName}</h1>
                 {!editing && (
                   <button onClick={() => setEditing(true)} className="rounded-md p-2 text-gold/40 transition-colors hover:bg-accent hover:text-gold min-h-[44px] min-w-[44px] flex items-center justify-center">
                     <Edit2 className="h-4 w-4" />
@@ -260,14 +261,14 @@ export default function ProfilePage() {
                   </div>
                 </div>
               ) : (
-                <p className="mb-4 text-muted-foreground text-sm" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontStyle: profile.bio ? 'normal' : 'italic' }}>{profile.bio || 'No bio yet'}</p>
+                <p className="mb-4 text-muted-foreground text-sm" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontSize: '15px', fontStyle: profile.bio ? 'normal' : 'italic' }}>{profile.bio || 'No bio yet'}</p>
               )}
 
               <div className="grid grid-cols-3 gap-2 sm:gap-4">
                 {stats.map((s) => {
                   const Icon = s.icon
                   return (
-                    <div key={s.label} className="rounded-md border border-gold/[0.06] bg-background p-3 sm:p-4">
+                    <div key={s.label} className="rounded-md border border-ink/20 bg-background p-3 sm:p-4">
                       <div className="mb-1 flex items-center gap-1 sm:gap-2">
                         <Icon className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-crimson/60" />
                         <p className="text-lg sm:text-2xl font-bold text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{s.value}</p>
@@ -282,7 +283,7 @@ export default function ProfilePage() {
         </motion.div>
 
         {/* Tabs */}
-        <div className="mb-6 border-b border-gold/10">
+        <div className="mb-6 border-b border-ink/20">
           <div className="flex gap-1 overflow-x-auto">
             {[
               { id: 'lists', label: 'Collections' },
@@ -307,23 +308,23 @@ export default function ProfilePage() {
         </div>
 
         {loadingData ? (
-          <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-gold/[0.06] bg-card">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-gold/30 border-t-crimson" />
+          <div className="flex min-h-[240px] items-center justify-center rounded-lg border border-ink/20 bg-card">
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-ink/70 border-t-crimson" />
           </div>
         ) : (
           <>
             {activeTab === 'lists' && (
-              <div className="rounded-lg border border-gold/[0.06] bg-card p-5 sm:p-6">
+              <div className="rounded-lg border border-ink/20 bg-card p-5 sm:p-6">
                 <div className="mb-4 flex items-center justify-between">
-                  <h2 className="text-lg font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Your Collections</h2>
+                  <h2 className="text-lg text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Your Collections</h2>
                   <button onClick={() => setShowCreateModal(true)} className="btn-imperial min-h-[38px] py-2 px-4 text-xs"><ListPlus className="h-3.5 w-3.5" /> Create</button>
                 </div>
                 {lists.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-gold/10 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>No collections yet</div>
+                  <div className="rounded-md border border-dashed border-ink/20 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>No collections yet</div>
                 ) : (
                   <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                     {lists.map((l) => (
-                      <Link key={l.id} to="/lists" className="rounded-md border border-gold/[0.06] bg-background p-4 transition-all hover:bg-accent hover:border-gold/15 cursor-pointer block">
+                      <Link key={l.id} to="/lists" className="rounded-md border border-ink/20 bg-background p-4 transition-all hover:bg-accent hover:border-ink/35 cursor-pointer block">
                         <p className="font-semibold text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{l.name}</p>
                         {l.description && <p className="mt-1 text-xs text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{l.description}</p>}
                         <p className="mt-3 text-[10px] text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>
@@ -337,21 +338,21 @@ export default function ProfilePage() {
             )}
 
             {activeTab === 'ratings' && (
-              <div className="rounded-lg border border-gold/[0.06] bg-card p-5 sm:p-6">
-                <h2 className="mb-4 text-lg font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Ratings</h2>
+              <div className="rounded-lg border border-ink/20 bg-card p-5 sm:p-6">
+                <h2 className="mb-4 text-lg text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Ratings</h2>
                 {unifiedRatings.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-gold/10 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>No ratings yet</div>
+                  <div className="rounded-md border border-dashed border-ink/20 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>No ratings yet</div>
                 ) : (
                   <div className="space-y-2">
                     {unifiedRatings.map((r) => (
-                      <div key={`rating-${r.type}-${r.id}-${r.anime?.id || 'unknown'}-${r.episode_number || ''}`} className="flex items-center gap-3 rounded-md border border-gold/[0.06] bg-background p-3 sm:p-4">
+                      <div key={`rating-${r.type}-${r.id}-${r.anime?.id || 'unknown'}-${r.episode_number || ''}`} className="flex items-center gap-3 rounded-md border border-ink/20 bg-background p-3 sm:p-4">
                         <Link to={r.anime ? `/anime/${r.anime.id}` : '#'} className="flex items-center gap-3 flex-1 min-w-0">
-                          {r.anime?.cover_image ? (<img src={r.anime.cover_image} alt={r.anime.title} className="h-16 w-11 rounded-sm object-cover shrink-0 border border-gold/[0.06]" />) : (<div className="h-16 w-11 rounded-sm bg-gradient-to-br from-crimson/20 to-ink shrink-0" />)}
+                          {r.anime?.cover_image ? (<img src={r.anime.cover_image} alt={r.anime.title} className="h-16 w-11 rounded-sm object-cover shrink-0 border border-ink/20" />) : (<div className="h-16 w-11 rounded-sm bg-gradient-to-br from-crimson/20 to-ink shrink-0" />)}
                           <div className="flex-1 min-w-0">
-                            <p className="truncate font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{r.anime?.title || 'Unknown anime'}{r.type === 'episode' && r.episode_number && ` – Ep ${r.episode_number}`}</p>
+                            <p className="truncate font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}><AnimeTitleText anime={r.anime} fallback="Unknown anime" />{r.type === 'episode' && r.episode_number && ` – Ep ${r.episode_number}`}</p>
                             <p className="text-[10px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{new Date(r.created_at).toLocaleDateString()}</p>
                           </div>
-                          <div className="shrink-0 rounded-sm bg-crimson/10 px-2.5 py-1 text-xs font-semibold text-crimson border border-crimson/15" style={{ fontFamily: 'Outfit, sans-serif' }}>{r.rating}/10</div>
+                          <div className="shrink-0 rounded-sm bg-crimson/10 px-2.5 py-1 text-xs font-semibold text-crimson border border-orange/70" style={{ fontFamily: 'Outfit, sans-serif' }}>{r.rating}/10</div>
                         </Link>
                         <button onClick={(e) => { e.stopPropagation(); if (confirm('Delete this rating?')) { deleteRating(r.id, r.type) } }} className="shrink-0 rounded-md p-1.5 text-destructive hover:bg-destructive/10 transition-colors"><Trash2 className="h-3.5 w-3.5" /></button>
                       </div>
@@ -362,18 +363,18 @@ export default function ProfilePage() {
             )}
 
             {activeTab === 'reviews' && (
-              <div className="rounded-lg border border-gold/[0.06] bg-card p-5 sm:p-6">
-                <h2 className="mb-4 text-lg font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>Reviews & Comments</h2>
+              <div className="rounded-lg border border-ink/20 bg-card p-5 sm:p-6">
+                <h2 className="mb-4 text-lg text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Reviews & Comments</h2>
                 {unifiedComments.length === 0 ? (
-                  <div className="rounded-md border border-dashed border-gold/10 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>No reviews or comments yet</div>
+                  <div className="rounded-md border border-dashed border-ink/20 p-10 text-center text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>No reviews or comments yet</div>
                 ) : (
                   <div className="space-y-2">
                     {unifiedComments.map((c) => (
-                      <div key={`comment-${c.type}-${c.id}-${c.anime?.id || 'unknown'}-${c.episode_number || ''}`} className="flex gap-3 rounded-md border border-gold/[0.06] bg-background p-3 sm:p-4">
+                      <div key={`comment-${c.type}-${c.id}-${c.anime?.id || 'unknown'}-${c.episode_number || ''}`} className="flex gap-3 rounded-md border border-ink/20 bg-background p-3 sm:p-4">
                         <Link to={c.anime ? `/anime/${c.anime.id}` : '#'} className="flex gap-3 flex-1 min-w-0">
-                          {c.anime?.cover_image ? (<img src={c.anime.cover_image} alt={c.anime.title} className="h-16 w-11 rounded-sm object-cover shrink-0 border border-gold/[0.06]" />) : (<div className="h-16 w-11 rounded-sm bg-gradient-to-br from-crimson/20 to-ink shrink-0" />)}
+                          {c.anime?.cover_image ? (<img src={c.anime.cover_image} alt={c.anime.title} className="h-16 w-11 rounded-sm object-cover shrink-0 border border-ink/20" />) : (<div className="h-16 w-11 rounded-sm bg-gradient-to-br from-crimson/20 to-ink shrink-0" />)}
                           <div className="flex-1 min-w-0">
-                            <p className="mb-1 truncate font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.anime?.title || 'Unknown anime'}{c.type === 'episode' && c.episode_number && ` – Ep ${c.episode_number}`}</p>
+                            <p className="mb-1 truncate font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}><AnimeTitleText anime={c.anime} fallback="Unknown anime" />{c.type === 'episode' && c.episode_number && ` – Ep ${c.episode_number}`}</p>
                             <p className="line-clamp-2 text-xs text-foreground/70" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.content}</p>
                             <p className="mt-2 text-[10px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{new Date(c.created_at).toLocaleDateString()}</p>
                           </div>

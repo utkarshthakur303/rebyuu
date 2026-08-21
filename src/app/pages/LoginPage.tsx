@@ -59,7 +59,7 @@ export default function LoginPage() {
         className="relative z-10 w-full max-w-md"
       >
         {/* Card */}
-        <div className="rounded-lg border border-gold/[0.08] bg-card/90 p-5 sm:p-6 md:p-8 shadow-2xl shadow-black/30 backdrop-blur-xl">
+        <div className="rounded-lg border border-ink/20 bg-card/90 p-5 sm:p-6 md:p-8 shadow-2xl shadow-black/30 backdrop-blur-xl">
           {/* Decorative top line */}
           <div className="mb-6 sm:mb-8 h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
           
@@ -74,10 +74,10 @@ export default function LoginPage() {
                 target.style.display = 'none';
               }}
             />
-            <h1 className="mb-2 text-2xl sm:text-3xl font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+            <h1 className="mb-2 text-2xl sm:text-3xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
               {isLogin ? 'Welcome Back' : 'Join the Archive'}
             </h1>
-            <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', fontStyle: 'italic' }}>
+            <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontSize: '15px', fontStyle: 'normal' }}>
               {isLogin ? 'Continue your journey through the archive' : 'Begin your path as a keeper of anime culture'}
             </p>
           </div>
@@ -161,7 +161,7 @@ export default function LoginPage() {
                 <label className="flex items-center gap-2 text-foreground/60">
                   <input
                     type="checkbox"
-                    className="h-3.5 w-3.5 rounded border-gold/20 bg-input-background text-crimson focus:ring-2 focus:ring-crimson/20"
+                    className="h-3.5 w-3.5 rounded border-ink/35 bg-input-background text-crimson focus:ring-2 focus:ring-crimson/20"
                   />
                   Remember me
                 </label>

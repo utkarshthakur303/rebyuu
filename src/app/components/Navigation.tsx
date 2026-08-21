@@ -6,6 +6,48 @@ import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import { UserDropdown } from './UserDropdown';
 import { getAnimeSearchSuggestions, type Anime } from '@/services/anime';
+import { useTitleLang, useAnimeTitle } from '@/context/TitleLangContext';
+
+/**
+ * EN | JP switch for anime titles across the site. Rendered as a segmented
+ * control so the inactive language stays visible — a single-label toggle
+ * leaves people guessing whether it shows the current or the next state.
+ */
+function TitleLangToggle({ className = '' }: { className?: string }) {
+  const { lang, toggle } = useTitleLang();
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={`Anime titles: ${lang === 'en' ? 'English' : 'Japanese'}. Switch to ${lang === 'en' ? 'Japanese' : 'English'}.`}
+      title="Switch anime title language"
+      /* 44px tall on touch layouts to clear the minimum tap target; the
+         desktop bar keeps the compact height. */
+      className={`inline-flex items-stretch border-2 border-ink overflow-hidden shrink-0 min-h-[44px] md:min-h-0 ${className}`}
+      style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
+    >
+      <span
+        className={`flex items-center px-2.5 md:px-2 py-1 text-[10px] font-bold tracking-[0.1em] transition-colors ${
+          lang === 'en' ? 'bg-orange text-ink' : 'bg-transparent text-ink/50'
+        }`}
+      >
+        EN
+      </span>
+      <span
+        className={`flex items-center px-2.5 md:px-2 py-1 text-[10px] font-bold tracking-[0.1em] transition-colors border-l-2 border-ink ${
+          lang === 'jp' ? 'bg-orange text-ink' : 'bg-transparent text-ink/50'
+        }`}
+      >
+        JP
+      </span>
+    </button>
+  );
+}
+
+/** Search suggestion row — needs the hook, so it lives in its own component. */
+function SuggestionTitle({ anime }: { anime: Anime }) {
+  return <>{useAnimeTitle(anime)}</>;
+}
 
 export function Navigation() {
   const location = useLocation();
@@ -163,7 +205,7 @@ export function Navigation() {
     >
       {loadingSuggestions ? (
         <div className="p-4 text-center">
-          <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-gold border-t-transparent" />
+          <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ink border-t-transparent" />
           <p className="mt-2 text-xs text-muted-foreground">Searching the archive...</p>
         </div>
       ) : (
@@ -187,14 +229,14 @@ export function Navigation() {
             )}
             <div className="flex-1 min-w-0">
               <p className="font-medium text-foreground truncate group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                {anime.title}
+                <SuggestionTitle anime={anime} />
               </p>
               {anime.genres && anime.genres.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-1">
                   {anime.genres.slice(0, 2).map((genre) => (
                     <span
                       key={genre}
-                      className="text-[10px] px-1.5 py-0.5 rounded border border-gold/20 bg-gold/5 text-gold/70 tracking-wider uppercase"
+                      className="text-[10px] px-1.5 py-0.5 rounded border border-ink/35 bg-gold/5 text-gold/70 tracking-wider uppercase"
                       style={{ fontFamily: 'Outfit, sans-serif' }}
                     >
                       {genre}
@@ -212,7 +254,7 @@ export function Navigation() {
   return (
     <nav className={`sticky top-0 z-[60] transition-all duration-500 ${
       scrolled
-        ? 'border-b border-gold/10 bg-background/90 backdrop-blur-2xl shadow-lg shadow-black/20'
+        ? 'border-b border-ink/20 bg-background/90 backdrop-blur-2xl shadow-lg shadow-black/20'
         : 'border-b border-transparent bg-background/50 backdrop-blur-sm'
     }`}>
       <div className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8">
@@ -267,15 +309,16 @@ export function Navigation() {
                 </Link>
               );
             })}
+            <TitleLangToggle className="ml-2" />
             {user ? (
               <UserDropdown />
             ) : (
               <Link
                 to="/login"
-                className="ml-2 rounded-md border border-gold/20 bg-transparent px-4 py-2 text-xs font-medium tracking-wider uppercase text-gold/80 transition-all duration-300 hover:bg-gold/5 hover:border-gold/35 hover:text-gold"
+                className="ml-2 rounded-md border border-ink/35 bg-transparent px-4 py-2 text-xs font-medium tracking-wider uppercase text-gold/80 transition-all duration-300 hover:bg-gold/5 hover:border-ink/70 hover:text-gold"
                 style={{ fontFamily: 'Outfit, sans-serif', letterSpacing: '0.1em' }}
               >
-                Enter
+                Login/Signup
               </Link>
             )}
           </div>
@@ -321,7 +364,9 @@ export function Navigation() {
 
           {/* Mobile Actions */}
           <div className="flex items-center gap-1 md:hidden">
-            <button 
+            {/* Same switch on mobile — the desktop nav row is hidden here. */}
+            <TitleLangToggle className="mr-1" />
+            <button
               onClick={() => setMobileSearchOpen(true)}
               className="rounded-lg p-2 text-gold/50 hover:bg-accent hover:text-gold min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
               aria-label="Search"
@@ -340,8 +385,8 @@ export function Navigation() {
             ) : (
               <Link
                 to="/login"
-                className="rounded-lg px-3 py-2 text-sm font-medium text-gold/70 border border-gold/15 hover:bg-accent min-h-[44px] flex items-center justify-center transition-colors"
-                aria-label="Login"
+                className="rounded-lg px-3 py-2 text-sm font-medium text-gold/70 border border-ink/35 hover:bg-accent min-h-[44px] flex items-center justify-center transition-colors"
+                aria-label="Login or sign up"
               >
                 <LogIn className="h-4 w-4" />
               </Link>
@@ -375,7 +420,7 @@ export function Navigation() {
                 initial={{ y: -20, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: -20, opacity: 0 }}
-                className="fixed inset-0 md:hidden top-0 left-0 right-0 z-[101] bg-background border-b border-gold/10"
+                className="fixed inset-0 md:hidden top-0 left-0 right-0 z-[101] bg-background border-b border-ink/20"
               >
               <div className="flex items-center gap-2 p-3">
                 <div className="relative flex-1">
@@ -449,7 +494,7 @@ export function Navigation() {
                 animate={{ x: 0 }}
                 exit={{ x: '-100%' }}
                 transition={{ type: 'spring', damping: 25 }}
-                className="fixed left-0 top-0 bottom-0 z-[101] w-72 overflow-y-auto border-r border-gold/10 bg-background p-5 md:hidden"
+                className="fixed left-0 top-0 bottom-0 z-[101] w-72 overflow-y-auto border-r border-ink/20 bg-background p-5 md:hidden"
               >
               {/* Drawer Header */}
               <div className="mb-8 flex items-center justify-between">
