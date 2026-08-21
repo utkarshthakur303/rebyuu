@@ -1,1 +1,8 @@
 node_modules
+
+# Local secrets. Real values live in Vercel env vars (build) and GitHub Actions
+# secrets (sync). .env was tracked here from the initial commit, which published
+# a service_role key to a public repo — never re-add it.
+.env
+.env.local
+.env.*.local
