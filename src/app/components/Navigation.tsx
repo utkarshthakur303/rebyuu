@@ -1,7 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { Search, Home, Grid3x3, User, LogIn, Shield, List, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { useEffect, useState, useRef, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useAuth } from '@/context/AuthContext';
 import { UserDropdown } from './UserDropdown';
@@ -49,6 +49,128 @@ function SuggestionTitle({ anime }: { anime: Anime }) {
   return <>{useAnimeTitle(anime)}</>;
 }
 
+/**
+ * The suggestion dropdown.
+ *
+ * Defined at module scope on purpose. It used to be declared inside
+ * `Navigation`, which gave it a new component identity on every render — React
+ * then unmounted and rebuilt every row. When that happened between a press and
+ * a release (and it happened routinely, because resolving titles triggers a
+ * context update moments after the list appears) the browser had no common
+ * element left to fire `click` on, and the tap did nothing. That is the
+ * "some don't open when clicked" bug.
+ *
+ * Rows also activate on pointer-down rather than click, so selection survives
+ * anything that closes the list on blur.
+ */
+const SearchSuggestions = memo(function SearchSuggestions({
+  suggestions,
+  loading,
+  activeIndex,
+  onSelect,
+  onHoverIndex,
+  listId,
+}: {
+  suggestions: Anime[];
+  loading: boolean;
+  activeIndex: number;
+  onSelect: (anime: Anime) => void;
+  onHoverIndex: (index: number) => void;
+  listId: string;
+}) {
+  if (loading && suggestions.length === 0) {
+    return (
+      <div className="absolute top-full left-0 right-0 mt-2 border-2 border-ink bg-card shadow-[4px_4px_0_0_var(--ink)] z-[200]">
+        <div className="p-4 text-center">
+          <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ink border-t-transparent" />
+          <p className="mt-2 text-xs text-muted-foreground">Searching the archive...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (suggestions.length === 0) {
+    return (
+      <div className="absolute top-full left-0 right-0 mt-2 border-2 border-ink bg-card shadow-[4px_4px_0_0_var(--ink)] z-[200]">
+        <p
+          className="p-4 text-center text-xs uppercase tracking-[0.15em] text-muted-foreground"
+          style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
+        >
+          No titles found
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      id={listId}
+      role="listbox"
+      className="absolute top-full left-0 right-0 mt-2 max-h-96 overflow-y-auto border-2 border-ink bg-card shadow-[4px_4px_0_0_var(--ink)] z-[200]"
+    >
+      {suggestions.map((anime, index) => (
+        <button
+          key={anime.id}
+          type="button"
+          role="option"
+          aria-selected={index === activeIndex}
+          id={`${listId}-opt-${index}`}
+          // Pointer-down, not click: the list closes on outside mousedown, and
+          // waiting for the full click let the row disappear underneath it.
+          onPointerDown={(e) => {
+            e.preventDefault();
+            onSelect(anime);
+          }}
+          // Keyboard activation and any environment without pointer events.
+          onClick={(e) => {
+            e.preventDefault();
+            onSelect(anime);
+          }}
+          onMouseEnter={() => onHoverIndex(index)}
+          className={`w-full flex items-center gap-3 p-3 text-left transition-colors border-b-2 border-ink/15 last:border-b-0 group ${
+            index === activeIndex ? 'bg-orange/20' : 'hover:bg-orange/10'
+          }`}
+        >
+          {anime.cover_image ? (
+            <img
+              src={anime.cover_image}
+              alt=""
+              loading="lazy"
+              className="h-14 w-10 object-cover shrink-0 border-2 border-ink"
+              onError={(e) => {
+                (e.currentTarget as HTMLImageElement).style.visibility = 'hidden';
+              }}
+            />
+          ) : (
+            <div className="h-14 w-10 bg-orange/30 border-2 border-ink shrink-0" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p
+              className="font-medium text-foreground truncate"
+              style={{ fontFamily: 'Outfit, sans-serif' }}
+            >
+              <SuggestionTitle anime={anime} />
+            </p>
+            {anime.genres && anime.genres.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-1">
+                {anime.genres.slice(0, 2).map((genre) => (
+                  <span
+                    key={genre}
+                    className="text-[10px] px-1.5 py-0.5 border border-ink/40 text-ink/70 tracking-wider uppercase"
+                    style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
+                  >
+                    {genre}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </button>
+      ))}
+    </div>
+  );
+});
+
 export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -58,10 +180,13 @@ export function Navigation() {
   const [suggestions, setSuggestions] = useState<Anime[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const [scrolled, setScrolled] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
+  const mobileSearchInputRef = useRef<HTMLInputElement>(null);
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
+  /** Monotonic id of the most recent suggestion request; older ones are dropped. */
+  const latestRequestRef = useRef(0);
   const { user, logout } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
@@ -90,29 +215,43 @@ export function Navigation() {
       return;
     }
 
+    // Responses can land out of order — the local-only path returns in ~250ms
+    // while one that waits on AniList takes ~800ms, so a slower request for an
+    // earlier prefix could overwrite the results for what was actually typed.
+    const requestId = ++latestRequestRef.current;
+
     setLoadingSuggestions(true);
     try {
       const { sanitizeSearchQuery } = await import('@/utils/sanitize');
       const sanitizedQuery = sanitizeSearchQuery(query.trim());
-      
+
       if (!sanitizedQuery || sanitizedQuery.length < 2) {
-        setSuggestions([]);
-        setShowSuggestions(false);
-        setLoadingSuggestions(false);
+        if (requestId === latestRequestRef.current) {
+          setSuggestions([]);
+          setShowSuggestions(false);
+          setLoadingSuggestions(false);
+        }
         return;
       }
-      
+
       const results = await getAnimeSearchSuggestions(sanitizedQuery, 10);
+      if (requestId !== latestRequestRef.current) return;
+
       setSuggestions(results);
-      setShowSuggestions(results.length > 0);
+      setActiveIndex(-1);
+      setShowSuggestions(true);
     } catch (error) {
       if (!import.meta.env.PROD) {
         console.error('Error fetching suggestions:', error);
       }
-      setSuggestions([]);
-      setShowSuggestions(false);
+      if (requestId === latestRequestRef.current) {
+        setSuggestions([]);
+        // Keep the panel open so the failure reads as "no titles found"
+        // rather than the box silently doing nothing.
+        setShowSuggestions(true);
+      }
     } finally {
-      setLoadingSuggestions(false);
+      if (requestId === latestRequestRef.current) setLoadingSuggestions(false);
     }
   }, []);
 
@@ -163,30 +302,70 @@ export function Navigation() {
     };
   }, [searchQuery, navigate, location.pathname]);
 
+  /**
+   * The desktop and mobile search boxes both render a dropdown, so a single
+   * shared ref pointed at whichever mounted last and the handler then treated
+   * taps inside the *other* one as outside clicks — closing the list mid-tap.
+   * Matching on an ancestor marker covers every instance without refs.
+   */
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        suggestionsRef.current &&
-        !suggestionsRef.current.contains(event.target as Node) &&
-        searchInputRef.current &&
-        !searchInputRef.current.contains(event.target as Node)
-      ) {
+    const handlePointerDown = (event: Event) => {
+      const target = event.target as HTMLElement | null;
+      if (!target?.closest?.('[data-search-root]')) {
         setShowSuggestions(false);
       }
     };
 
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    document.addEventListener('pointerdown', handlePointerDown);
+    return () => document.removeEventListener('pointerdown', handlePointerDown);
   }, []);
 
-  const handleSuggestionClick = (anime: Anime) => {
-    setSearchQuery('');
-    setShowSuggestions(false);
-    setSuggestions([]);
-    navigate(`/anime/${anime.id}`);
-  };
+  const handleSuggestionClick = useCallback(
+    (anime: Anime) => {
+      setSearchQuery('');
+      setShowSuggestions(false);
+      setSuggestions([]);
+      setActiveIndex(-1);
+      setMobileSearchOpen(false);
+      navigate(`/anime/${anime.id}`);
+    },
+    [navigate]
+  );
+
+  /** Shared by both inputs so desktop and mobile behave identically. */
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      const open = showSuggestions && suggestions.length > 0;
+
+      if (e.key === 'ArrowDown' && open) {
+        e.preventDefault();
+        setActiveIndex((i) => (i + 1) % suggestions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp' && open) {
+        e.preventDefault();
+        setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (open && activeIndex >= 0 && suggestions[activeIndex]) {
+          handleSuggestionClick(suggestions[activeIndex]);
+          return;
+        }
+        const q = searchQuery.trim();
+        setShowSuggestions(false);
+        setMobileSearchOpen(false);
+        navigate(q ? `/browse?q=${encodeURIComponent(q)}` : '/browse');
+        return;
+      }
+      if (e.key === 'Escape') {
+        setShowSuggestions(false);
+        setActiveIndex(-1);
+      }
+    },
+    [showSuggestions, suggestions, activeIndex, searchQuery, navigate, handleSuggestionClick]
+  );
 
   const handleMobileLogout = async () => {
     try {
@@ -197,59 +376,6 @@ export function Navigation() {
       // silently handle
     }
   };
-
-  const SuggestionsList = ({ onItemClick }: { onItemClick?: () => void }) => (
-    <div
-      ref={suggestionsRef}
-      className="absolute top-full left-0 right-0 mt-2 max-h-96 overflow-y-auto rounded-lg border border-border bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/40 z-[200]"
-    >
-      {loadingSuggestions ? (
-        <div className="p-4 text-center">
-          <div className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-ink border-t-transparent" />
-          <p className="mt-2 text-xs text-muted-foreground">Searching the archive...</p>
-        </div>
-      ) : (
-        suggestions.map((anime) => (
-          <button
-            key={anime.id}
-            onClick={() => {
-              handleSuggestionClick(anime);
-              onItemClick?.();
-            }}
-            className="w-full flex items-center gap-3 p-3 text-left hover:bg-accent/50 transition-colors border-b border-border/30 last:border-b-0 group"
-          >
-            {anime.cover_image ? (
-              <img
-                src={anime.cover_image}
-                alt={anime.title}
-                className="h-14 w-10 object-cover rounded shrink-0 border border-border/30"
-              />
-            ) : (
-              <div className="h-14 w-10 bg-gradient-to-br from-crimson to-crimson-dark rounded shrink-0" />
-            )}
-            <div className="flex-1 min-w-0">
-              <p className="font-medium text-foreground truncate group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                <SuggestionTitle anime={anime} />
-              </p>
-              {anime.genres && anime.genres.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-1">
-                  {anime.genres.slice(0, 2).map((genre) => (
-                    <span
-                      key={genre}
-                      className="text-[10px] px-1.5 py-0.5 rounded border border-ink/35 bg-gold/5 text-gold/70 tracking-wider uppercase"
-                      style={{ fontFamily: 'Outfit, sans-serif' }}
-                    >
-                      {genre}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-          </button>
-        ))
-      )}
-    </div>
-  );
 
   return (
     <nav className={`sticky top-0 z-[60] transition-all duration-500 ${
@@ -325,39 +451,40 @@ export function Navigation() {
 
           {/* Search Bar - Desktop */}
           <div className="hidden lg:block flex-1 max-w-md ml-4">
-            <div className="relative">
+            <div className="relative" data-search-root>
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gold/40 z-10" />
               <input
                 ref={searchInputRef}
                 type="text"
+                role="combobox"
+                aria-expanded={showSuggestions}
+                aria-controls="search-suggestions-desktop"
+                aria-autocomplete="list"
+                aria-activedescendant={
+                  activeIndex >= 0 ? `search-suggestions-desktop-opt-${activeIndex}` : undefined
+                }
                 placeholder="Search the archive..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => {
-                  if (suggestions.length > 0) {
-                    setShowSuggestions(true);
-                  }
+                  if (suggestions.length > 0) setShowSuggestions(true);
                 }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    const q = searchQuery.trim();
-                    setShowSuggestions(false);
-                    if (q) {
-                      navigate(`/browse?q=${encodeURIComponent(q)}`);
-                    } else {
-                      navigate('/browse');
-                    }
-                  } else if (e.key === 'Escape') {
-                    setShowSuggestions(false);
-                  }
-                }}
+                onKeyDown={handleSearchKeyDown}
                 className="input-imperial w-full py-2 pl-10 pr-4 text-sm"
                 style={{ fontSize: '14px', fontFamily: 'Outfit, sans-serif' }}
               />
-              
-              {showSuggestions && (suggestions.length > 0 || loadingSuggestions) && (
-                <SuggestionsList />
+
+              {/* Suppressed while the mobile sheet is open so only one list is
+                  ever mounted — two competed for the same keyboard state. */}
+              {showSuggestions && !mobileSearchOpen && searchQuery.trim().length >= 2 && (
+                <SearchSuggestions
+                  suggestions={suggestions}
+                  loading={loadingSuggestions}
+                  activeIndex={activeIndex}
+                  onSelect={handleSuggestionClick}
+                  onHoverIndex={setActiveIndex}
+                  listId="search-suggestions-desktop"
+                />
               )}
             </div>
           </div>
@@ -423,41 +550,40 @@ export function Navigation() {
                 className="fixed inset-0 md:hidden top-0 left-0 right-0 z-[101] bg-background border-b border-ink/20"
               >
               <div className="flex items-center gap-2 p-3">
-                <div className="relative flex-1">
+                <div className="relative flex-1" data-search-root>
                   <Search className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gold/40 z-10" />
                   <input
-                    ref={searchInputRef}
+                    ref={mobileSearchInputRef}
                     type="text"
+                    role="combobox"
+                    aria-expanded={showSuggestions}
+                    aria-controls="search-suggestions-mobile"
+                    aria-autocomplete="list"
+                    aria-activedescendant={
+                      activeIndex >= 0 ? `search-suggestions-mobile-opt-${activeIndex}` : undefined
+                    }
                     placeholder="Search the archive..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     onFocus={() => {
-                      if (suggestions.length > 0) {
-                        setShowSuggestions(true);
-                      }
+                      if (suggestions.length > 0) setShowSuggestions(true);
                     }}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.preventDefault();
-                        const q = searchQuery.trim();
-                        setMobileSearchOpen(false);
-                        setShowSuggestions(false);
-                        if (q) {
-                          navigate(`/browse?q=${encodeURIComponent(q)}`);
-                        } else {
-                          navigate('/browse');
-                        }
-                      } else if (e.key === 'Escape') {
-                        setShowSuggestions(false);
-                      }
-                    }}
+                    onKeyDown={handleSearchKeyDown}
                     autoFocus
                     className="input-imperial w-full py-3 pl-10 pr-4 text-base"
+                    /* 16px keeps iOS Safari from zooming the viewport on focus. */
                     style={{ fontSize: '16px', fontFamily: 'Outfit, sans-serif' }}
                   />
-                  
-                  {showSuggestions && (suggestions.length > 0 || loadingSuggestions) && (
-                    <SuggestionsList onItemClick={() => setMobileSearchOpen(false)} />
+
+                  {showSuggestions && searchQuery.trim().length >= 2 && (
+                    <SearchSuggestions
+                      suggestions={suggestions}
+                      loading={loadingSuggestions}
+                      activeIndex={activeIndex}
+                      onSelect={handleSuggestionClick}
+                      onHoverIndex={setActiveIndex}
+                      listId="search-suggestions-mobile"
+                    />
                   )}
                 </div>
                 <button

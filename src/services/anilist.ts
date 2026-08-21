@@ -100,20 +100,36 @@ const BY_IDS_QUERY = `
   }
 `;
 
-async function anilistRequest<T>(query: string, variables: unknown): Promise<T | null> {
+async function anilistRequest<T>(
+  query: string,
+  variables: unknown,
+  timeoutMs?: number
+): Promise<T | null> {
+  // Without a deadline a slow AniList response holds the caller open
+  // indefinitely — a search request was observed taking 18s, which would have
+  // left the suggestion dropdown spinning that whole time.
+  const controller = timeoutMs ? new AbortController() : null;
+  const timer = controller
+    ? setTimeout(() => controller.abort(), timeoutMs)
+    : null;
+
   try {
     const res = await fetch(ANILIST_API, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
       body: JSON.stringify({ query, variables }),
+      signal: controller?.signal,
     });
     if (!res.ok) return null;
     const json = await res.json();
     if (json.errors) return null;
     return json.data as T;
   } catch {
-    // Offline, rate-limited, or blocked. Callers fall back to the DB ordering.
+    // Offline, rate-limited, timed out, or blocked. Callers fall back to the
+    // DB ordering.
     return null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -216,6 +232,158 @@ export async function fetchTitles(
   for (const m of data?.Page?.media ?? []) map[m.id] = m.title;
   if (Object.keys(map).length) writeCache(cacheKey, map);
   return map;
+}
+
+export interface AniListMedia {
+  id: number;
+  title: TitleSet;
+  /** Alternate spellings and abbreviations ("AoT", "SnK"). */
+  synonyms: string[];
+  averageScore: number | null;
+  popularity: number | null;
+  genres: string[];
+  year: number | null;
+  season: string | null;
+  status: string | null;
+  episodes: number | null;
+  description: string | null;
+  coverImage: string | null;
+  bannerImage: string | null;
+  trailer: string | null;
+}
+
+/** Every field `anime_index` stores, so a result can stand in for a DB row. */
+const MEDIA_FIELDS = `
+  id
+  title { english romaji native }
+  synonyms
+  averageScore
+  popularity
+  genres
+  startDate { year }
+  season
+  status
+  episodes
+  description
+  coverImage { large }
+  bannerImage
+  trailer { id site }
+`;
+
+const SEARCH_QUERY = `
+  query ($q: String, $perPage: Int) {
+    Page(page: 1, perPage: $perPage) {
+      media(type: ANIME, search: $q, sort: [SEARCH_MATCH], isAdult: false) {
+        ${MEDIA_FIELDS}
+      }
+    }
+  }
+`;
+
+const MEDIA_BY_ID_QUERY = `
+  query ($id: Int) {
+    Media(type: ANIME, id: $id) {
+      ${MEDIA_FIELDS}
+    }
+  }
+`;
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function normaliseMedia(m: any): AniListMedia | null {
+  if (!m || typeof m.id !== 'number') return null;
+  return {
+    id: m.id,
+    title: {
+      english: m.title?.english ?? null,
+      romaji: m.title?.romaji ?? null,
+      native: m.title?.native ?? null,
+    },
+    synonyms: Array.isArray(m.synonyms) ? m.synonyms.filter((s: unknown) => typeof s === 'string') : [],
+    averageScore: typeof m.averageScore === 'number' ? m.averageScore : null,
+    popularity: typeof m.popularity === 'number' ? m.popularity : null,
+    genres: Array.isArray(m.genres) ? m.genres : [],
+    year: m.startDate?.year ?? null,
+    season: m.season ?? null,
+    status: m.status ?? null,
+    episodes: typeof m.episodes === 'number' ? m.episodes : null,
+    description: typeof m.description === 'string' ? m.description : null,
+    coverImage: m.coverImage?.large ?? null,
+    bannerImage: m.bannerImage ?? null,
+    trailer:
+      m.trailer?.site === 'youtube' && m.trailer?.id
+        ? `https://www.youtube.com/watch?v=${m.trailer.id}`
+        : null,
+  };
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+/**
+ * Search results are held in memory rather than localStorage: queries are
+ * high-cardinality (one entry per prefix the visitor types), so persisting them
+ * would churn through the storage quota and evict the caches that matter.
+ */
+const searchMemo = new Map<string, AniListMedia[]>();
+const SEARCH_MEMO_MAX = 120;
+
+/**
+ * Full-text search straight from AniList.
+ *
+ * This is what makes the box find titles the local index can't: `anime_index`
+ * collapses each title to one string (`english || romaji`), so a row stored as
+ * "Attack on Titan" is unreachable by its romaji name and vice versa. AniList
+ * matches against english, romaji, native *and* synonyms, and also knows about
+ * shows announced since the last nightly sync.
+ *
+ * Returns [] on any failure — the Supabase results still stand on their own.
+ */
+export async function searchAnime(
+  query: string,
+  perPage: number = 12
+): Promise<AniListMedia[]> {
+  const q = query.trim();
+  if (q.length < 2) return [];
+
+  const key = `${q.toLowerCase()}:${perPage}`;
+  const memo = searchMemo.get(key);
+  if (memo) return memo;
+
+  const data = await anilistRequest<{ Page: { media: unknown[] } }>(
+    SEARCH_QUERY,
+    { q, perPage: Math.min(perPage, 50) },
+    // Type-ahead budget: past this the local results are better than a wait.
+    3000
+  );
+
+  const results = (data?.Page?.media ?? [])
+    .map(normaliseMedia)
+    .filter((m): m is AniListMedia => m !== null);
+
+  if (results.length) {
+    // Cheap FIFO bound; the oldest key is the first one insertion order yields.
+    if (searchMemo.size >= SEARCH_MEMO_MAX) {
+      const oldest = searchMemo.keys().next().value;
+      if (oldest !== undefined) searchMemo.delete(oldest);
+    }
+    searchMemo.set(key, results);
+  }
+  return results;
+}
+
+/**
+ * One title by AniList id, used when a detail page is opened for something the
+ * local index doesn't have — a brand-new show, or a stale bookmark.
+ */
+export async function fetchMediaById(anilistId: number): Promise<AniListMedia | null> {
+  const cacheKey = `media:${anilistId}`;
+  const cached = readCache<AniListMedia>(cacheKey);
+  if (cached) return cached;
+
+  const data = await anilistRequest<{ Media: unknown }>(MEDIA_BY_ID_QUERY, {
+    id: anilistId,
+  });
+  const media = normaliseMedia(data?.Media);
+  if (media) writeCache(cacheKey, media);
+  return media;
 }
 
 export interface MalScore {
