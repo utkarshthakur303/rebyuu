@@ -2,98 +2,133 @@
 
 :root {
   --font-size: 16px;
-  /* Imperial Japanese Dark Theme */
-  --background: #080808;
-  --foreground: #e8e0d4;
-  --card: #111111;
-  --card-foreground: #e8e0d4;
-  --popover: #141414;
-  --popover-foreground: #e8e0d4;
-  --primary: #c41e3a;
-  --primary-foreground: #fef3e2;
-  --secondary: #1a1510;
-  --secondary-foreground: #e8e0d4;
-  --muted: #1a1510;
-  --muted-foreground: #8a7e6b;
-  --accent: #1e1814;
-  --accent-foreground: #e8e0d4;
-  --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --border: rgba(196, 164, 106, 0.12);
+  /* ═══ REBYUU BRUTALIST PAPER ═══
+     Paper canvas, ink structure, orange signal.
+     Palette anchored to HeroSection.tsx. */
+  --background: #edebe4;
+  --foreground: #0a0a0a;
+  --card: #e7e4db;
+  --card-foreground: #0a0a0a;
+  --popover: #edebe4;
+  --popover-foreground: #0a0a0a;
+  --primary: #ff7a18;
+  --primary-foreground: #0a0a0a;
+  --secondary: #0a0a0a;
+  --secondary-foreground: #edebe4;
+  --muted: #dedbd1;
+  --muted-foreground: #57534a;
+  --accent: #ff7a18;
+  --accent-foreground: #0a0a0a;
+  --destructive: #c4261e;
+  --destructive-foreground: #edebe4;
+  --border: rgba(10, 10, 10, 0.22);
   --input: transparent;
-  --input-background: #141210;
-  --switch-background: #2a2420;
+  --input-background: #e7e4db;
+  --switch-background: #c9c6bc;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --ring: #c41e3a;
-  --chart-1: #c41e3a;
-  --chart-2: #c4a46a;
-  --chart-3: #6b8f71;
-  --chart-4: #d4a574;
-  --chart-5: #8b4513;
-  --radius: 0.5rem;
-  --sidebar: #0a0908;
-  --sidebar-foreground: #e8e0d4;
-  --sidebar-primary: #c41e3a;
-  --sidebar-primary-foreground: #fef3e2;
-  --sidebar-accent: #1a1510;
-  --sidebar-accent-foreground: #e8e0d4;
-  --sidebar-border: rgba(196, 164, 106, 0.12);
-  --sidebar-ring: #c41e3a;
+  --ring: #ff7a18;
+  --chart-1: #ff7a18;
+  --chart-2: #b23c00;
+  --chart-3: #0f7b4f;
+  --chart-4: #0a0a0a;
+  --chart-5: #7dffc3;
+  /* Brutalist: hard corners everywhere */
+  --radius: 0rem;
+  --sidebar: #e7e4db;
+  --sidebar-foreground: #0a0a0a;
+  --sidebar-primary: #ff7a18;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #dedbd1;
+  --sidebar-accent-foreground: #0a0a0a;
+  --sidebar-border: rgba(10, 10, 10, 0.22);
+  --sidebar-ring: #ff7a18;
 
-  /* Imperial Extended Palette */
-  --gold: #c4a46a;
-  --gold-light: #d4b98a;
-  --gold-dark: #8b7340;
-  --crimson: #c41e3a;
-  --crimson-light: #e63950;
-  --crimson-dark: #8b1528;
-  --ink: #1a1510;
-  --parchment: #f5e6c8;
-  --parchment-dark: #d4c4a0;
-  --bamboo: #6b8f71;
-  --sake: #f0e4d0;
-  --charcoal: #2a2420;
-  --obsidian: #0d0c0a;
-  --lantern-glow: rgba(196, 164, 106, 0.15);
-  --ember: #d4764a;
+  /* ── Hero-native palette ──
+     Named exactly as HeroSection.tsx uses them. */
+  --paper: #edebe4;
+  --paper-dim: #e7e4db;
+  --orange: #ff7a18;
+  --orange-deep: #b23c00;
+  --mint: #7dffc3;
+  --signal-green: #0f7b4f;
+
+  /* ── Legacy token remap ──
+     ~317 call sites still reference these names. Values are chosen
+     by DOMINANT usage on a light canvas, not by old semantics:
+       gold    -> border(118) + text(65)  => must stay readable on paper
+       crimson -> bg(27) + gradients(27)  => the vivid signal orange */
+  --gold: #b23c00;
+  --gold-light: #d9531a;
+  --gold-dark: #7a2900;
+  --crimson: #ff7a18;
+  --crimson-light: #ff9b4d;
+  --crimson-dark: #b23c00;
+  --ink: #0a0a0a;
+  --parchment: #edebe4;
+  --parchment-dark: #d5d1c6;
+  --bamboo: #0f7b4f;
+  --sake: #f5f3ec;
+  --charcoal: #1c1b18;
+  --obsidian: #0a0a0a;
+  --lantern-glow: rgba(255, 122, 24, 0.18);
+  --ember: #ff7a18;
 }
 
+/* The site renders on the paper canvas only — no `dark` class is applied
+   anywhere. Kept in sync with :root so toggling it can never resurrect the
+   retired imperial palette; make it a real inverted theme deliberately. */
 .dark {
-  --background: #080808;
-  --foreground: #e8e0d4;
-  --card: #111111;
-  --card-foreground: #e8e0d4;
-  --popover: #141414;
-  --popover-foreground: #e8e0d4;
-  --primary: #c41e3a;
-  --primary-foreground: #fef3e2;
-  --secondary: #1a1510;
-  --secondary-foreground: #e8e0d4;
-  --muted: #1a1510;
-  --muted-foreground: #8a7e6b;
-  --accent: #1e1814;
-  --accent-foreground: #e8e0d4;
-  --destructive: #dc2626;
-  --destructive-foreground: #ffffff;
-  --border: rgba(196, 164, 106, 0.12);
-  --input: rgba(196, 164, 106, 0.06);
-  --ring: #c41e3a;
+  --background: #0a0a0a;
+  --foreground: #edebe4;
+  --card: #131311;
+  --card-foreground: #edebe4;
+  --popover: #131311;
+  --popover-foreground: #edebe4;
+  --primary: #ff7a18;
+  --primary-foreground: #0a0a0a;
+  --secondary: #edebe4;
+  --secondary-foreground: #0a0a0a;
+  --muted: #1c1b18;
+  --muted-foreground: #a8a496;
+  --accent: #ff7a18;
+  --accent-foreground: #0a0a0a;
+  --destructive: #e5484d;
+  --destructive-foreground: #0a0a0a;
+  --border: rgba(237, 235, 228, 0.22);
+  --input: rgba(237, 235, 228, 0.06);
+  --ring: #ff7a18;
   --font-weight-medium: 500;
   --font-weight-normal: 400;
-  --chart-1: #c41e3a;
-  --chart-2: #c4a46a;
-  --chart-3: #6b8f71;
-  --chart-4: #d4a574;
-  --chart-5: #8b4513;
-  --sidebar: #0a0908;
-  --sidebar-foreground: #e8e0d4;
-  --sidebar-primary: #c41e3a;
-  --sidebar-primary-foreground: #fef3e2;
-  --sidebar-accent: #1a1510;
-  --sidebar-accent-foreground: #e8e0d4;
-  --sidebar-border: rgba(196, 164, 106, 0.12);
-  --sidebar-ring: #c41e3a;
+  --chart-1: #ff7a18;
+  --chart-2: #ff9b4d;
+  --chart-3: #7dffc3;
+  --chart-4: #edebe4;
+  --chart-5: #0f7b4f;
+  --sidebar: #131311;
+  --sidebar-foreground: #edebe4;
+  --sidebar-primary: #ff7a18;
+  --sidebar-primary-foreground: #0a0a0a;
+  --sidebar-accent: #1c1b18;
+  --sidebar-accent-foreground: #edebe4;
+  --sidebar-border: rgba(237, 235, 228, 0.22);
+  --sidebar-ring: #ff7a18;
+
+  /* Legacy tokens flip to their on-dark-canvas readable values */
+  --gold: #ff9b4d;
+  --gold-light: #ffb877;
+  --gold-dark: #b23c00;
+  --crimson: #ff7a18;
+  --crimson-light: #ff9b4d;
+  --crimson-dark: #b23c00;
+  --ink: #0a0a0a;
+  --parchment: #edebe4;
+  --parchment-dark: #a8a496;
+  --bamboo: #7dffc3;
+  --sake: #edebe4;
+  --charcoal: #1c1b18;
+  --obsidian: #0a0a0a;
+  --ember: #ff7a18;
 }
 
 @theme inline {
@@ -123,10 +158,12 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* Brutalist: every derived radius is square. Set explicitly rather than
+     calc()'d off --radius:0, which would yield negative lengths. */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
@@ -135,6 +172,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+
+  /* Hero-native tokens */
+  --color-paper: var(--paper);
+  --color-paper-dim: var(--paper-dim);
+  --color-orange: var(--orange);
+  --color-orange-deep: var(--orange-deep);
+  --color-mint: var(--mint);
+  --color-signal-green: var(--signal-green);
 
   /* Extended theme tokens */
   --color-gold: var(--gold);
@@ -159,7 +204,7 @@
 
   body {
     @apply bg-background text-foreground;
-    font-family: 'Cormorant Garamond', 'Noto Serif JP', serif;
+    font-family: 'Outfit', ui-sans-serif, system-ui, sans-serif;
   }
 
   /**
@@ -172,58 +217,75 @@
     scroll-behavior: smooth;
   }
 
+  /* Display type: Anton, matching the hero headline.
+     Anton ships a single weight (400) — never assign a heavier value or the
+     browser synthesises a smeared faux-bold. */
   h1 {
-    font-family: 'Cinzel', 'Noto Serif JP', serif;
+    font-family: 'Anton', Impact, sans-serif;
     font-size: var(--text-2xl);
-    font-weight: 600;
-    line-height: 1.3;
-    letter-spacing: 0.02em;
+    font-weight: 400;
+    line-height: 0.9;
+    letter-spacing: -0.01em;
+    text-transform: uppercase;
   }
 
   h2 {
-    font-family: 'Cinzel', 'Noto Serif JP', serif;
+    font-family: 'Anton', Impact, sans-serif;
     font-size: var(--text-xl);
-    font-weight: 600;
-    line-height: 1.3;
-    letter-spacing: 0.02em;
+    font-weight: 400;
+    line-height: 0.95;
+    letter-spacing: -0.005em;
+    text-transform: uppercase;
   }
 
+  /* Sub-headings drop to terminal chrome rather than more display type,
+     mirroring the hero's mono readouts. */
   h3 {
-    font-family: 'Cormorant Garamond', serif;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: var(--text-lg);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.4;
+    font-weight: 700;
+    line-height: 1.3;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   h4 {
-    font-family: 'Cormorant Garamond', serif;
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
     font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
-    line-height: 1.5;
+    font-weight: 500;
+    line-height: 1.4;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   label {
-    font-family: 'Outfit', sans-serif;
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--text-sm);
+    font-weight: 500;
     line-height: 1.5;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
   button {
-    font-family: 'Outfit', sans-serif;
-    font-size: var(--text-base);
-    font-weight: var(--font-weight-medium);
+    font-family: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: var(--text-sm);
+    font-weight: 700;
     line-height: 1.5;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
   }
 
+  /* Inputs stay in Outfit — anime titles and search queries need to read as
+     prose, not as chrome. */
   input, textarea, select {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Outfit', ui-sans-serif, sans-serif;
     font-size: var(--text-base);
     font-weight: var(--font-weight-normal);
     line-height: 1.5;
   }
 
   p, span, div {
-    font-family: 'Outfit', sans-serif;
+    font-family: 'Outfit', ui-sans-serif, sans-serif;
   }
 }

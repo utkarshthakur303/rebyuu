@@ -42,14 +42,14 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               transition={{ type: 'spring', duration: 0.5 }}
-              className="w-full h-full sm:h-auto sm:max-w-md sm:rounded-lg border-0 sm:border border-gold/10 bg-card p-5 sm:p-6 shadow-2xl shadow-black/50 sm:my-auto"
+              className="w-full h-full sm:h-auto sm:max-w-md sm:rounded-lg border-0 sm:border border-ink/20 bg-card p-5 sm:p-6 shadow-2xl shadow-black/50 sm:my-auto"
             >
               {/* Decorative top line */}
               <div className="mb-5 h-[1px] bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
 
               {/* Header */}
               <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+                <h2 className="text-xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
                   Create Collection
                 </h2>
                 <button
@@ -96,7 +96,7 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
                 </div>
 
                 {/* Privacy Toggle */}
-                <div className="flex items-center justify-between rounded-md border border-gold/10 bg-input-background p-4">
+                <div className="flex items-center justify-between rounded-md border border-ink/20 bg-input-background p-4">
                   <div>
                     <p className="font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Private Collection</p>
                     <p className="text-xs text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>Only you can see this</p>
@@ -111,7 +111,7 @@ export function CreateListModal({ isOpen, onClose, onSave }: CreateListModalProp
                     <motion.div
                       animate={{ x: isPrivate ? 20 : 2 }}
                       transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-                      className="absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm"
+                      className="absolute top-0.5 h-5 w-5 rounded-full bg-paper border-2 border-ink"
                     />
                   </button>
                 </div>

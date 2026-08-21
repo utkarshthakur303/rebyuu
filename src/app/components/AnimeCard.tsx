@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { Anime } from '@/services/anime';
+import { useAnimeTitle } from '@/context/TitleLangContext';
 
 interface AnimeCardProps {
   anime: Anime;
@@ -13,6 +14,7 @@ interface AnimeCardProps {
 
 export function AnimeCard({ anime, index }: AnimeCardProps) {
   const navigate = useNavigate();
+  const displayTitle = useAnimeTitle(anime);
   const [showPreview, setShowPreview] = useState(false);
   const [previewPosition, setPreviewPosition] = useState<{ top: number; left: number } | null>(null);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -88,13 +90,13 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
           onClick={handleClick}
           className="block h-full cursor-pointer"
         >
-        <div className="relative h-full overflow-hidden rounded-md bg-card border border-gold/[0.06] transition-all duration-500 group-hover:border-gold/20 group-hover:shadow-[0_15px_50px_rgba(0,0,0,0.4),0_0_30px_rgba(196,164,106,0.04)]">
+        <div className="relative h-full overflow-hidden bg-card border-2 border-ink transition-all duration-300 group-hover:shadow-[6px_6px_0_var(--orange)]">
           {/* Image Container */}
           <div className="relative aspect-[2/3] w-full overflow-hidden">
             {anime.cover_image ? (
               <img
                 src={anime.cover_image}
-                alt={anime.title || 'Anime'}
+                alt={displayTitle || 'Anime'}
                 className="h-full w-full object-cover transition-transform duration-700 ease-out group-hover:scale-105"
                 loading="lazy"
                 decoding="async"
@@ -117,11 +119,13 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
             {/* Rating Badge */}
             {anime.rating && (
               <div 
-                className="absolute right-2 top-2 flex items-center gap-1 rounded-sm bg-black/70 px-2 py-1 backdrop-blur-sm border border-gold/10"
+                className="absolute right-2 top-2 flex items-center gap-1 bg-ink px-2 py-1 border-2 border-ink"
                 onClick={(e) => e.stopPropagation()}
               >
                 <Star className="h-3 w-3 star-gold" />
-                <span className="text-xs font-semibold text-gold" style={{ fontFamily: 'Outfit, sans-serif' }}>{anime.rating.toFixed(1)}</span>
+                {/* Vivid orange, not --gold: the deep burnt orange is tuned for
+                    paper and drops to ~2.5:1 against this ink chip. */}
+                <span className="text-xs font-bold text-orange" style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>{anime.rating.toFixed(1)}</span>
               </div>
             )}
 
@@ -130,13 +134,17 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
               className="absolute left-2 top-2"
               onClick={(e) => e.stopPropagation()}
             >
-              <span className={`rounded-sm px-2 py-0.5 text-[10px] font-semibold tracking-wider uppercase backdrop-blur-sm border ${
-                anime.status === 'airing' 
-                  ? 'bg-bamboo/20 text-bamboo border-bamboo/30' 
+              {/* Opaque blocks, not translucent tints: this badge sits over
+                  arbitrary key art, so a tinted background would take its
+                  contrast from whatever poster happens to be behind it.
+                  Mint mirrors the hero's LIVE_NOW badge. */}
+              <span className={`px-2 py-0.5 text-[10px] font-bold tracking-wider uppercase border-2 border-ink ${
+                anime.status === 'airing'
+                  ? 'bg-mint text-ink'
                   : anime.status === 'upcoming'
-                  ? 'bg-gold/10 text-gold border-gold/20'
-                  : 'bg-charcoal/60 text-muted-foreground border-border/30'
-              }`} style={{ fontFamily: 'Outfit, sans-serif' }}>
+                  ? 'bg-orange text-ink'
+                  : 'bg-paper text-ink'
+              }`} style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>
                 {anime.status.toUpperCase()}
               </span>
             </div>
@@ -155,7 +163,7 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
                     {anime.genres.slice(0, 3).map((genre) => (
                       <span
                         key={genre}
-                        className="rounded-sm bg-crimson/60 px-1.5 py-0.5 text-[9px] font-medium tracking-wider uppercase text-white/90 backdrop-blur-sm"
+                        className="bg-orange px-1.5 py-0.5 text-[9px] font-bold tracking-wider uppercase text-ink"
                         style={{ fontFamily: 'Outfit, sans-serif' }}
                       >
                         {genre}
@@ -169,8 +177,8 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
 
           {/* Title and Info */}
           <div className="p-3 sm:p-3.5">
-            <h3 className="mb-1.5 line-clamp-2 text-sm font-semibold text-foreground transition-colors duration-300 group-hover:text-gold" style={{ fontFamily: 'Cormorant Garamond, serif', fontSize: '15px', lineHeight: '1.3' }}>
-              {anime.title}
+            <h3 className="mb-1.5 line-clamp-2 text-sm font-semibold text-foreground transition-colors duration-300 group-hover:text-gold" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontSize: '15px', lineHeight: '1.3' }}>
+              {displayTitle}
             </h3>
             <div className="flex items-center gap-2 text-[11px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
               {anime.year && <span>{anime.year}</span>}
@@ -189,7 +197,7 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.95 }}
           transition={{ duration: 0.2 }}
-          className="hidden lg:block fixed z-[9999] w-80 rounded-lg border border-gold/15 bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/50"
+          className="hidden lg:block fixed z-[9999] w-80 rounded-lg border border-ink/35 bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/50"
           style={{ 
             pointerEvents: 'none',
             top: `${previewPosition.top}px`,
@@ -204,8 +212,8 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
             {/* Gold accent line */}
             <div className="mb-3 h-[1px] bg-gradient-to-r from-crimson via-gold/30 to-transparent" />
             
-            <h3 className="mb-2 text-lg font-bold text-foreground line-clamp-2" style={{ fontFamily: 'Cormorant Garamond, serif' }}>
-              {anime.title}
+            <h3 className="mb-2 text-lg font-bold text-foreground line-clamp-2" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif' }}>
+              {displayTitle}
             </h3>
             
             {anime.genres.length > 0 && (
@@ -213,7 +221,7 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
                 {anime.genres.slice(0, 4).map((genre) => (
                   <span
                     key={genre}
-                    className="rounded-sm border border-gold/15 bg-gold/5 px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase text-gold/70"
+                    className="rounded-sm border border-ink/35 bg-gold/5 px-2 py-0.5 text-[10px] font-medium tracking-wider uppercase text-gold/70"
                     style={{ fontFamily: 'Outfit, sans-serif' }}
                   >
                     {genre}

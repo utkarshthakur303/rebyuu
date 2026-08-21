@@ -12,6 +12,7 @@ import AdminPage from '@/app/pages/AdminPage';
 import ListsPage from '@/app/pages/ListsPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import Toaster from '@/app/components/Toaster';
+import { TitleLangProvider } from '@/context/TitleLangContext';
 import { Analytics } from "@vercel/analytics/next"
 
 function ScrollToTop() {
@@ -26,7 +27,12 @@ export default function App() {
   return (
     <ErrorBoundary>
       <BrowserRouter>
-        <div className="dark min-h-screen bg-background text-foreground grain-overlay">
+        {/* Wraps Navigation too — the EN/JP switch lives in the navbar, and
+            search suggestions there render titles as well. */}
+        <TitleLangProvider>
+        {/* No `dark` class: the site renders on the paper canvas defined in
+            :root. Re-adding it flips every token to the inverted palette. */}
+        <div className="min-h-screen bg-background text-foreground grain-overlay">
           <ScrollToTop />
           <Navigation />
           <Toaster />
@@ -43,6 +49,7 @@ export default function App() {
           </main>
           <Footer />
         </div>
+        </TitleLangProvider>
       </BrowserRouter>
     </ErrorBoundary>
   );

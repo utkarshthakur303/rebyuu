@@ -1,11 +1,19 @@
-/* Cinzel — Imperial headings, editorial hero type */
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;500;600;700;800;900&display=swap');
+/* ═══ REBYUU TYPE SYSTEM ═══
+   Three faces, each with one job:
+     Anton         — display headings (h1/h2), uppercase
+     JetBrains Mono — terminal chrome: labels, buttons, badges, h3/h4
+     Outfit         — body copy and inputs
 
-/* Cormorant Garamond — Elegant serif body text, Japanese luxury feel */
-@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500&display=swap');
+   The retired imperial faces (Cinzel, Cormorant Garamond, Noto Serif JP)
+   were removed once the last reference was retheme'd — each was a
+   render-blocking request for a font nothing rendered in any more. */
 
-/* Outfit — Clean, modern sans-serif for UI elements */
+/* Anton — heavy condensed display type, anchors the hero headline.
+   Ships a single weight (400); never apply a bold class to it. */
+@import url('https://fonts.googleapis.com/css2?family=Anton&display=swap');
+
+/* JetBrains Mono — terminal/system readout chrome */
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap');
+
+/* Outfit — clean sans for body copy and form fields */
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
-
-/* Noto Serif JP — Japanese serif for cultural authenticity */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@200;300;400;500;600;700;900&display=swap');

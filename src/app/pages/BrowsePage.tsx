@@ -9,6 +9,7 @@ export default function BrowsePage() {
   const [searchParams] = useSearchParams();
   const queryParam = searchParams.get('q') || '';
   const genreParam = searchParams.get('genre') || '';
+  const statusParam = searchParams.get('status') || '';
   
   // Sync search query from URL to Navigation component
   useEffect(() => {
@@ -25,13 +26,17 @@ export default function BrowsePage() {
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
 
-  // Parse genre query param on mount
+  // Parse genre / status query params on mount
   useEffect(() => {
     if (genreParam) {
       const genreCapitalized = genreParam.charAt(0).toUpperCase() + genreParam.slice(1);
       if (genres.includes(genreCapitalized)) {
         setSelectedGenres([genreCapitalized]);
       }
+    }
+    // Lets the homepage "View More" buttons land on a pre-filtered Browse.
+    if (statusParam && (statuses as readonly string[]).includes(statusParam)) {
+      setSelectedStatus(statusParam);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -157,7 +162,7 @@ export default function BrowsePage() {
             <div className="flex items-start gap-3">
               <div className="hidden sm:block h-10 w-[3px] rounded-full bg-gradient-to-b from-crimson via-crimson/50 to-transparent mt-1 shrink-0" />
               <div>
-                <h1 className="mb-1 text-2xl sm:text-3xl md:text-4xl font-semibold text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>
+                <h1 className="mb-1 text-2xl sm:text-3xl md:text-4xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
                   Browse Archive
                 </h1>
                 <p className="text-xs sm:text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
@@ -171,7 +176,7 @@ export default function BrowsePage() {
             {hasActiveFilters && (
               <button
                 onClick={clearFilters}
-                className="flex items-center gap-2 rounded-md border border-gold/15 bg-card px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-gold/25 min-h-[44px]"
+                className="flex items-center gap-2 rounded-md border border-ink/35 bg-card px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-ink/70 min-h-[44px]"
                 style={{ fontFamily: 'Outfit, sans-serif' }}
               >
                 <X className="h-3.5 w-3.5" />
@@ -180,7 +185,7 @@ export default function BrowsePage() {
             )}
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className="flex items-center gap-2 rounded-md bg-crimson px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-white transition-all hover:bg-crimson/90 lg:hidden min-h-[44px]"
+              className="flex items-center gap-2 rounded-md bg-crimson px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-ink transition-all hover:bg-crimson/90 lg:hidden min-h-[44px]"
               style={{ fontFamily: 'Outfit, sans-serif' }}
             >
               <Filter className="h-3.5 w-3.5" />
@@ -192,9 +197,9 @@ export default function BrowsePage() {
         <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
           {/* Sidebar Filters - Desktop */}
           <aside className="hidden lg:block w-64 shrink-0">
-            <div className="sticky top-20 lg:top-24 space-y-6 rounded-lg border border-gold/[0.08] bg-card p-4 lg:p-5">
+            <div className="sticky top-20 lg:top-24 space-y-6 rounded-lg border border-ink/20 bg-card p-4 lg:p-5">
               {/* Decorative header */}
-              <div className="pb-3 border-b border-gold/10">
+              <div className="pb-3 border-b border-ink/20">
                 <p className="text-[10px] tracking-[0.2em] uppercase text-gold/40 font-medium" style={{ fontFamily: 'Outfit, sans-serif' }}>Refine Search</p>
               </div>
 
@@ -207,7 +212,7 @@ export default function BrowsePage() {
                       onClick={() => setSelectedStatus(status)}
                       className={`w-full rounded-md px-3 py-2 text-left text-xs transition-all ${
                         selectedStatus === status
-                          ? 'bg-crimson text-white'
+                          ? 'bg-crimson text-ink'
                           : 'text-foreground/70 hover:bg-accent hover:text-foreground'
                       }`}
                       style={{ fontFamily: 'Outfit, sans-serif' }}
@@ -227,8 +232,8 @@ export default function BrowsePage() {
                       onClick={() => toggleGenre(genre)}
                       className={`rounded-sm px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase transition-all ${
                         selectedGenres.includes(genre)
-                          ? 'bg-crimson text-white shadow-md shadow-crimson/20'
-                          : 'border border-gold/10 bg-transparent text-foreground/60 hover:bg-accent hover:border-gold/20'
+                          ? 'bg-crimson text-ink shadow-md shadow-crimson/20'
+                          : 'border border-ink/20 bg-transparent text-foreground/60 hover:bg-accent hover:border-ink/35'
                       }`}
                       style={{ fontFamily: 'Outfit, sans-serif' }}
                     >
@@ -262,8 +267,8 @@ export default function BrowsePage() {
                       onClick={() => setSelectedSeason(selectedSeason === season ? null : season)}
                       className={`rounded-md px-3 py-2.5 text-xs transition-all min-h-[40px] ${
                         selectedSeason === season
-                          ? 'bg-crimson text-white'
-                          : 'border border-gold/10 bg-transparent text-foreground/60 hover:bg-accent'
+                          ? 'bg-crimson text-ink'
+                          : 'border border-ink/20 bg-transparent text-foreground/60 hover:bg-accent'
                       }`}
                       style={{ fontFamily: 'Outfit, sans-serif' }}
                     >
@@ -291,7 +296,7 @@ export default function BrowsePage() {
                   animate={{ x: 0 }}
                   exit={{ x: '100%' }}
                   transition={{ type: 'spring', damping: 25 }}
-                  className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-sm overflow-y-auto border-l border-gold/10 bg-background p-4 sm:p-6 lg:hidden"
+                  className="fixed right-0 top-0 bottom-0 z-50 w-full max-w-sm overflow-y-auto border-l border-ink/20 bg-background p-4 sm:p-6 lg:hidden"
                 >
                   <div className="mb-4 sm:mb-6 flex items-center justify-between">
                     <h2 className="text-sm font-semibold tracking-[0.15em] uppercase text-gold/70" style={{ fontFamily: 'Outfit, sans-serif' }}>Filters</h2>
@@ -313,7 +318,7 @@ export default function BrowsePage() {
                             onClick={() => setSelectedStatus(status)}
                             className={`w-full rounded-md px-3 py-3 text-left text-sm transition-all min-h-[44px] ${
                               selectedStatus === status
-                                ? 'bg-crimson text-white'
+                                ? 'bg-crimson text-ink'
                                 : 'text-foreground/70 hover:bg-accent'
                             }`}
                             style={{ fontFamily: 'Outfit, sans-serif' }}
@@ -333,8 +338,8 @@ export default function BrowsePage() {
                             onClick={() => toggleGenre(genre)}
                             className={`rounded-sm px-3 py-2 text-xs font-medium tracking-wider transition-all min-h-[36px] ${
                               selectedGenres.includes(genre)
-                                ? 'bg-crimson text-white shadow-md shadow-crimson/20'
-                                : 'border border-gold/10 bg-transparent text-foreground/60 hover:bg-accent'
+                                ? 'bg-crimson text-ink shadow-md shadow-crimson/20'
+                                : 'border border-ink/20 bg-transparent text-foreground/60 hover:bg-accent'
                             }`}
                             style={{ fontFamily: 'Outfit, sans-serif' }}
                           >
@@ -368,8 +373,8 @@ export default function BrowsePage() {
                             onClick={() => setSelectedSeason(selectedSeason === season ? null : season)}
                             className={`rounded-md px-3 py-3 text-sm transition-all min-h-[44px] ${
                               selectedSeason === season
-                                ? 'bg-crimson text-white'
-                                : 'border border-gold/10 bg-transparent text-foreground/60 hover:bg-accent'
+                                ? 'bg-crimson text-ink'
+                                : 'border border-ink/20 bg-transparent text-foreground/60 hover:bg-accent'
                             }`}
                             style={{ fontFamily: 'Outfit, sans-serif' }}
                           >
@@ -406,7 +411,7 @@ export default function BrowsePage() {
                       <button
                         onClick={() => handlePageChange(page - 1)}
                         disabled={page === 1 || loading}
-                        className="flex items-center gap-1 rounded-md border border-gold/10 bg-card px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-gold/20 disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px]"
+                        className="flex items-center gap-1 rounded-md border border-ink/20 bg-card px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-ink/35 disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px]"
                         style={{ fontFamily: 'Outfit, sans-serif' }}
                       >
                         <ChevronLeft className="h-3.5 w-3.5" />
@@ -425,8 +430,8 @@ export default function BrowsePage() {
                               disabled={loading}
                               className={`min-w-[44px] min-h-[44px] rounded-md px-3 py-2 text-xs font-medium tracking-wider transition-all flex items-center justify-center ${
                                 page === pageNum
-                                  ? 'bg-crimson text-white shadow-lg shadow-crimson/20'
-                                  : 'border border-gold/10 bg-card text-foreground/70 hover:bg-accent hover:border-gold/20'
+                                  ? 'bg-crimson text-ink shadow-lg shadow-crimson/20'
+                                  : 'border border-ink/20 bg-card text-foreground/70 hover:bg-accent hover:border-ink/35'
                               } disabled:opacity-30 disabled:cursor-not-allowed`}
                               style={{ fontFamily: 'Outfit, sans-serif' }}
                             >
@@ -439,7 +444,7 @@ export default function BrowsePage() {
                       <button
                         onClick={() => handlePageChange(page + 1)}
                         disabled={page === totalPages || loading}
-                        className="flex items-center gap-1 rounded-md border border-gold/10 bg-card px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-gold/20 disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px]"
+                        className="flex items-center gap-1 rounded-md border border-ink/20 bg-card px-3 sm:px-4 py-2.5 sm:py-2 text-xs font-medium tracking-wider uppercase text-foreground transition-all hover:bg-accent hover:border-ink/35 disabled:opacity-30 disabled:cursor-not-allowed min-h-[44px]"
                         style={{ fontFamily: 'Outfit, sans-serif' }}
                       >
                         <span>Next</span>
@@ -450,10 +455,10 @@ export default function BrowsePage() {
                 )}
               </>
             ) : (
-              <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-gold/10">
+              <div className="flex min-h-[400px] items-center justify-center rounded-lg border border-dashed border-ink/20">
                 <div className="text-center">
-                  <p className="mb-2 text-lg font-medium text-foreground" style={{ fontFamily: 'Cinzel, serif' }}>No entries found</p>
-                  <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Cormorant Garamond, serif', fontStyle: 'italic' }}>
+                  <p className="mb-2 text-lg text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>No entries found</p>
+                  <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
                     {queryParam ? 'Try a different search term' : 'Adjust your filters to discover more'}
                   </p>
                 </div>

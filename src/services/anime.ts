@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { fetchRanked, type RankedEntry } from './anilist';
 
 export interface Anime {
   id: string;
@@ -122,53 +123,74 @@ export async function getAnimeReviews(animeId: string): Promise<Review[]> {
   }));
 }
 
-export async function getTrendingAnime(limit: number = 6): Promise<Anime[]> {
-  const { data, error } = await supabase
-    .from('anime_index')
-    .select('*')
-    .order('rating', { ascending: false })
-    .limit(limit);
+/**
+ * Hydrates a live AniList ranking into full rows from `anime_index`.
+ *
+ * Supabase returns `.in()` results in arbitrary order, so the ranking is
+ * re-applied client-side — otherwise the "trending" order would be lost the
+ * moment the rows come back. Ids missing from our snapshot are skipped, which
+ * is why callers over-fetch the ranking before slicing to `limit`.
+ */
+async function hydrateRanked(entries: RankedEntry[], limit: number): Promise<Anime[]> {
+  if (!entries.length) return [];
 
+  const ids = entries.map((e) => e.id);
+  const { data, error } = await supabase.from('anime_index').select('*').in('id', ids);
+  if (error || !data?.length) return [];
+
+  const byId = new Map(data.map((row) => [row.id, row as Anime]));
+  const ordered: Anime[] = [];
+  for (const entry of entries) {
+    const row = byId.get(entry.id);
+    if (row) ordered.push(row);
+    if (ordered.length === limit) break;
+  }
+  return ordered;
+}
+
+/** Static fallback used whenever the live ranking is unavailable. */
+async function rankedFallback(
+  limit: number,
+  status?: 'airing' | 'completed' | 'upcoming'
+): Promise<Anime[]> {
+  let q = supabase.from('anime_index').select('*');
+  if (status) q = q.eq('status', status);
+  const { data, error } = await q.order('rating', { ascending: false }).limit(limit);
   if (error) {
-    console.error('Error fetching trending anime:', error);
+    console.error('Error fetching section (fallback):', error);
     return [];
   }
-
   return data || [];
 }
 
-export async function getFanFavorites(limit: number = 12): Promise<Anime[]> {
-  const { data, error } = await supabase
-    .from('anime_index')
-    .select('*')
-    .order('rating', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error('Error fetching fan favorites:', error);
-    return [];
-  }
-
-  return data || [];
+export async function getTrendingAnime(limit: number = 8): Promise<Anime[]> {
+  // Over-fetch: some AniList trending titles won't exist in our snapshot.
+  const ranked = await fetchRanked('TRENDING_DESC', Math.min(limit * 3, 50));
+  const hydrated = await hydrateRanked(ranked, limit);
+  return hydrated.length ? hydrated : rankedFallback(limit);
 }
 
-export async function getAiringNow(limit: number = 12): Promise<Anime[]> {
-  const { data, error } = await supabase
-    .from('anime_index')
-    .select('*')
-    .eq('status', 'airing')
-    .order('rating', { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    console.error('Error fetching airing now:', error);
-    return [];
-  }
-
-  return data || [];
+export async function getFanFavorites(limit: number = 8): Promise<Anime[]> {
+  const ranked = await fetchRanked('FAVOURITES_DESC', Math.min(limit * 3, 50));
+  const hydrated = await hydrateRanked(ranked, limit);
+  return hydrated.length ? hydrated : rankedFallback(limit);
 }
 
-export async function getUpcoming(limit: number = 12): Promise<Anime[]> {
+export async function getAiringNow(limit: number = 8): Promise<Anime[]> {
+  const ranked = await fetchRanked('TRENDING_DESC', 50, 'RELEASING');
+  const hydrated = await hydrateRanked(ranked, limit);
+  // Our snapshot has only 2 rows marked `airing`, so the DB fallback is thin —
+  // the live ranking is what makes this section meaningful.
+  return hydrated.length ? hydrated : rankedFallback(limit, 'airing');
+}
+
+export async function getUpcoming(limit: number = 8): Promise<Anime[]> {
+  // Unreleased titles have no meaningful score, so rank them by anticipation
+  // (popularity) rather than by rating.
+  const ranked = await fetchRanked('POPULARITY_DESC', 50, 'NOT_YET_RELEASED');
+  const hydrated = await hydrateRanked(ranked, limit);
+  if (hydrated.length) return hydrated;
+
   const { data, error } = await supabase
     .from('anime_index')
     .select('*')
@@ -182,6 +204,55 @@ export async function getUpcoming(limit: number = 12): Promise<Anime[]> {
   }
 
   return data || [];
+}
+
+/**
+ * Hero rotation pool: the current top trending titles, shuffled.
+ *
+ * Over-fetches the live ranking because the hero is a wide key-art stage —
+ * entries carrying a real `banner_image` are preferred, and cover-art-only
+ * ones are used just to top the pool back up to `size`.
+ */
+export async function getTrendingHeroPool(size: number = 10): Promise<Anime[]> {
+  const ranked = await fetchRanked('TRENDING_DESC', 50);
+  const hydrated = await hydrateRanked(ranked, 50);
+
+  const withBanner = hydrated.filter((a) => a.banner_image);
+  const withoutBanner = hydrated.filter((a) => !a.banner_image);
+  const pool = [...withBanner, ...withoutBanner].slice(0, size);
+
+  // Fall back to the previous Action-based pool if the ranking is unavailable.
+  const chosen = pool.length ? pool : await getRandomActionAnime(size);
+
+  for (let i = chosen.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [chosen[i], chosen[j]] = [chosen[j], chosen[i]];
+  }
+  return chosen;
+}
+
+export async function getRandomActionAnime(poolSize: number = 40): Promise<Anime[]> {
+  const { data, error } = await supabase
+    .from('anime_index')
+    .select('*')
+    .overlaps('genres', ['Action'])
+    .not('banner_image', 'is', null)
+    // Postgres sorts DESC as NULLS FIRST, so without this the pool filled up
+    // with unrated titles — which is why the hero kept showing no score.
+    .order('rating', { ascending: false, nullsFirst: false })
+    .limit(poolSize);
+
+  if (error) {
+    console.error('Error fetching action anime:', error);
+    return [];
+  }
+
+  const pool = [...(data || [])];
+  for (let i = pool.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [pool[i], pool[j]] = [pool[j], pool[i]];
+  }
+  return pool;
 }
 
 export const genres = [
