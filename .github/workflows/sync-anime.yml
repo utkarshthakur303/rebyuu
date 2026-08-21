@@ -1,0 +1,51 @@
+name: Sync anime catalogue
+
+# The homepage takes its *rankings* live from AniList, but the row data
+# (title, art, description) comes from the `anime_index` table. Without a
+# scheduled sync that table goes stale and newly announced shows are silently
+# dropped from the sections — they simply aren't in the table to hydrate.
+on:
+  schedule:
+    # 03:20 UTC daily. Off the hour, since scheduled jobs queue heavily on it.
+    - cron: '20 3 * * *'
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'fresh = the slices the site surfaces (~2 min); full = deep catalogue backfill (slow)'
+        required: false
+        default: 'fresh'
+        type: choice
+        options: [fresh, full]
+
+# Never let a slow `full` run overlap the next scheduled `fresh` one.
+concurrency:
+  group: sync-anime
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Sync from AniList
+        env:
+          # Set these as repository secrets. If absent, the script's dotenv
+          # call falls back to the committed .env — dotenv does not overwrite
+          # variables already present, so secrets always win when set.
+          VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
+          VITE_SUPABASE_KEY: ${{ secrets.VITE_SUPABASE_KEY }}
+          # Optional. Preferred over the anon key when present, so RLS can be
+          # tightened to block anonymous writes without breaking this job.
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SYNC_MODE: ${{ inputs.mode || 'fresh' }}
+        run: npm run sync:anime

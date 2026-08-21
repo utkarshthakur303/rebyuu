@@ -5,14 +5,14 @@ import { createClient } from '@supabase/supabase-js';
 const ANILIST_API = 'https://graphql.anilist.co';
 
 const ANILIST_QUERY = `
-  query ($page: Int, $perPage: Int) {
+  query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus) {
     Page(page: $page, perPage: $perPage) {
       pageInfo {
         total
         currentPage
         hasNextPage
       }
-      media(type: ANIME, sort: POPULARITY_DESC) {
+      media(type: ANIME, sort: $sort, status: $status, isAdult: false) {
         id
         title {
           romaji
@@ -87,38 +87,60 @@ function mapSeason(season: string | null): string | null {
   return seasonMap[season] || null;
 }
 
-async function fetchAniListPage(page: number, perPage: number = 50): Promise<{
-  data: AniListMedia[];
-  hasNextPage: boolean;
-}> {
-  const response = await fetch(ANILIST_API, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json'
-    },
-    body: JSON.stringify({
-      query: ANILIST_QUERY,
-      variables: { page, perPage }
-    })
-  });
+type AniListSort = 'POPULARITY_DESC' | 'TRENDING_DESC' | 'START_DATE_DESC';
+type AniListStatus = 'RELEASING' | 'NOT_YET_RELEASED' | 'FINISHED';
 
-  if (!response.ok) {
-    throw new Error(`AniList API error: ${response.statusText}`);
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * AniList allows 30 requests/minute. The original 1s delay ran at 60/min and
+ * would trip the limiter partway through a deep crawl.
+ */
+const REQUEST_INTERVAL_MS = 2200;
+
+async function fetchAniListPage(
+  page: number,
+  perPage: number = 50,
+  sort: AniListSort = 'POPULARITY_DESC',
+  status?: AniListStatus
+): Promise<{ data: AniListMedia[]; hasNextPage: boolean }> {
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const response = await fetch(ANILIST_API, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      },
+      body: JSON.stringify({
+        query: ANILIST_QUERY,
+        variables: { page, perPage, sort: [sort], status }
+      })
+    });
+
+    if (response.status === 429) {
+      // Honour Retry-After when present; otherwise back off progressively.
+      const retryAfter = Number(response.headers.get('retry-after')) || (attempt + 1) * 20;
+      console.log(`  rate limited, waiting ${retryAfter}s...`);
+      await sleep(retryAfter * 1000);
+      continue;
+    }
+
+    if (!response.ok) {
+      throw new Error(`AniList API error: ${response.status} ${response.statusText}`);
+    }
+
+    const result = await response.json();
+    if (result.errors) {
+      throw new Error(`AniList GraphQL errors: ${JSON.stringify(result.errors)}`);
+    }
+
+    return {
+      data: result.data.Page.media,
+      hasNextPage: result.data.Page.pageInfo.hasNextPage
+    };
   }
 
-  const result = await response.json();
-  if (result.errors) {
-    throw new Error(`AniList GraphQL errors: ${JSON.stringify(result.errors)}`);
-  }
-
-  const pageInfo = result.data.Page.pageInfo;
-  const media = result.data.Page.media;
-
-  return {
-    data: media,
-    hasNextPage: pageInfo.hasNextPage
-  };
+  throw new Error('AniList rate limit not cleared after 5 attempts');
 }
 
 async function syncAnimeToSupabase(
@@ -158,49 +180,85 @@ async function syncAnimeToSupabase(
   }
 }
 
+interface Pass {
+  label: string;
+  sort: AniListSort;
+  status?: AniListStatus;
+  maxPages: number;
+}
+
+/**
+ * Daily default. Sorting the whole catalogue by POPULARITY_DESC buries newly
+ * announced shows hundreds of pages deep, so a popularity-only crawl takes
+ * ~440 pages to reach titles the homepage needs *today*. These passes fetch
+ * exactly the slices the site surfaces, in about a minute.
+ */
+const FRESH_PASSES: Pass[] = [
+  { label: 'trending', sort: 'TRENDING_DESC', maxPages: 4 },
+  { label: 'airing', sort: 'POPULARITY_DESC', status: 'RELEASING', maxPages: 4 },
+  { label: 'upcoming', sort: 'POPULARITY_DESC', status: 'NOT_YET_RELEASED', maxPages: 4 },
+  { label: 'newly-added', sort: 'START_DATE_DESC', maxPages: 3 },
+  { label: 'popular', sort: 'POPULARITY_DESC', maxPages: 6 }
+];
+
+/** SYNC_MODE=full — deep backfill of the whole catalogue. Slow; run rarely. */
+const FULL_PASSES: Pass[] = [
+  ...FRESH_PASSES,
+  { label: 'popular-deep', sort: 'POPULARITY_DESC', maxPages: 500 }
+];
+
+async function runPass(
+  supabase: ReturnType<typeof createClient>,
+  pass: Pass
+): Promise<number> {
+  console.log(`\n── pass: ${pass.label} (${pass.sort}${pass.status ? ' / ' + pass.status : ''}) ──`);
+  let synced = 0;
+
+  for (let page = 1; page <= pass.maxPages; page++) {
+    try {
+      const { data, hasNextPage } = await fetchAniListPage(page, 50, pass.sort, pass.status);
+      if (!data.length) break;
+
+      await syncAnimeToSupabase(supabase, data);
+      synced += data.length;
+      console.log(`  page ${page}: +${data.length} (pass total ${synced})`);
+
+      if (!hasNextPage) break;
+      await sleep(REQUEST_INTERVAL_MS);
+    } catch (error) {
+      // One bad page shouldn't abandon the remaining passes.
+      console.error(`  page ${page} failed:`, error instanceof Error ? error.message : error);
+      break;
+    }
+  }
+
+  return synced;
+}
+
 async function syncAnime() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
-  const supabaseKey = process.env.VITE_SUPABASE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_KEY;
 
   if (!supabaseUrl || !supabaseKey) {
     throw new Error('Missing VITE_SUPABASE_URL or VITE_SUPABASE_KEY environment variables');
   }
 
   const supabase = createClient(supabaseUrl, supabaseKey);
+  const mode = (process.env.SYNC_MODE || 'fresh').toLowerCase();
+  const passes = mode === 'full' ? FULL_PASSES : FRESH_PASSES;
 
-  let page = 1;
-  let hasNextPage = true;
-  let totalSynced = 0;
+  console.log(`Starting AniList sync (mode=${mode})...`);
+  const started = Date.now();
+  let total = 0;
 
-  console.log('Starting AniList sync...');
-
-  while (hasNextPage) {
-    try {
-      console.log(`Fetching page ${page}...`);
-      const { data, hasNextPage: next } = await fetchAniListPage(page, 50);
-      
-      if (data.length === 0) {
-        console.log('No more data to fetch');
-        break;
-      }
-
-      console.log(`Syncing ${data.length} anime to Supabase...`);
-      await syncAnimeToSupabase(supabase, data);
-      
-      totalSynced += data.length;
-      console.log(`Synced ${totalSynced} anime so far...`);
-
-      hasNextPage = next;
-      page++;
-
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    } catch (error) {
-      console.error(`Error syncing page ${page}:`, error);
-      break;
-    }
+  for (const pass of passes) {
+    total += await runPass(supabase, pass);
+    await sleep(REQUEST_INTERVAL_MS);
   }
 
-  console.log(`Sync complete! Total anime synced: ${totalSynced}`);
+  const mins = ((Date.now() - started) / 60000).toFixed(1);
+  // Rows overlap between passes, so this counts upserts, not distinct titles.
+  console.log(`\nSync complete in ${mins} min. Rows upserted: ${total}`);
 }
 
 syncAnime().catch(console.error);
