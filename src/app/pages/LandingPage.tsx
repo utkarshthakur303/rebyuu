@@ -47,13 +47,19 @@ export default function LandingPage() {
     title,
     subtitle,
     items,
-    viewMoreTo = '/browse'
+    viewMoreTo
   }: {
     title: string
     subtitle?: string
     items: Anime[]
-    /** Where "View More" lands — pre-filters Browse where the section maps to one. */
-    viewMoreTo?: string
+    /**
+     * Browse, pre-set to the same ordering and filter this rail was built from,
+     * so following it continues the list rather than restarting on the whole
+     * archive. Both the header link and the footer button use it — the header
+     * one used to be hardcoded to a bare /browse, which meant "View All" on
+     * Trending silently dropped you into everything sorted by stored score.
+     */
+    viewMoreTo: string
   }) => {
     return (
       <motion.section
@@ -78,8 +84,8 @@ export default function LandingPage() {
               )}
             </div>
           </div>
-          <Link 
-            to="/browse" 
+          <Link
+            to={viewMoreTo}
             className="text-xs font-medium tracking-[0.1em] uppercase text-gold/60 hover:text-gold transition-colors duration-300 shrink-0 border-b border-ink/35 hover:border-ink/70 pb-0.5"
             style={{ fontFamily: 'Outfit, sans-serif' }}
           >
@@ -118,26 +124,48 @@ export default function LandingPage() {
     <div className="min-h-screen bg-background pb-20 md:pb-0 overflow-x-hidden">
       <HeroSection />
 
-      {/* ═══ CONTENT SECTIONS ═══ */}
-      <Section title="Trending" subtitle="Trending on AniList right now" items={trendingAnime} />
-      
+      {/* ═══ CONTENT SECTIONS ═══
+          Each destination mirrors the exact ranking its rail was loaded with,
+          so Browse opens on the same list continued past the eighth card. */}
+      <Section
+        title="Trending"
+        subtitle="Trending on AniList right now"
+        items={trendingAnime}
+        viewMoreTo="/browse?sort=trending"
+      />
+
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="brush-divider" />
       </div>
 
-      <Section title="Fan Favorites" subtitle="Beloved by the community" items={fanFavorites} />
-      
+      <Section
+        title="Fan Favorites"
+        subtitle="Beloved by the community"
+        items={fanFavorites}
+        viewMoreTo="/browse?sort=favorites"
+      />
+
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="brush-divider" />
       </div>
 
-      <Section title="Airing Now" subtitle="Currently broadcasting" items={airingNow} viewMoreTo="/browse?status=airing" />
-      
+      <Section
+        title="Airing Now"
+        subtitle="Currently broadcasting"
+        items={airingNow}
+        viewMoreTo="/browse?status=airing&sort=trending"
+      />
+
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
         <div className="brush-divider" />
       </div>
 
-      <Section title="Upcoming" subtitle="Anticipated releases" items={upcoming} viewMoreTo="/browse?status=upcoming" />
+      <Section
+        title="Upcoming"
+        subtitle="Anticipated releases"
+        items={upcoming}
+        viewMoreTo="/browse?status=upcoming&sort=popularity"
+      />
 
       {/* ═══ POPULAR GENRES ═══ */}
       <section className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-10 sm:py-14 md:py-16">

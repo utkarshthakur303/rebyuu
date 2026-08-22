@@ -201,7 +201,21 @@ export function HeroSection() {
                     textTransform: 'uppercase',
                   }}
                 >
-                  {displayTitle || 'LOADING ARCHIVE'}
+                  {anime ? (
+                    // The headline is the most obviously clickable thing on the
+                    // page and led nowhere. `color: inherit` keeps the paper/ink
+                    // treatment; the underline only appears on hover so the flat
+                    // poster look is undisturbed at rest.
+                    <Link
+                      to={`/anime/${anime.id}`}
+                      className="hero-title-link"
+                      style={{ color: 'inherit', textDecoration: 'none' }}
+                    >
+                      {displayTitle}
+                    </Link>
+                  ) : (
+                    'LOADING ARCHIVE'
+                  )}
                 </h1>
 
                 <div className="mt-7 sm:mt-9 flex items-center gap-5">
@@ -264,11 +278,17 @@ export function HeroSection() {
                 >
                   <div className="relative aspect-[16/10] w-full overflow-hidden bg-black">
                     {anime && (
-                      <img
-                        src={anime.banner_image || anime.cover_image}
-                        alt={displayTitle}
-                        className="h-full w-full object-cover"
-                      />
+                      <Link
+                        to={`/anime/${anime.id}`}
+                        className="group block h-full w-full"
+                        aria-label={`Open ${displayTitle}`}
+                      >
+                        <img
+                          src={anime.banner_image || anime.cover_image}
+                          alt={displayTitle}
+                          className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                        />
+                      </Link>
                     )}
                   </div>
 

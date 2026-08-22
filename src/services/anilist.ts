@@ -22,7 +22,8 @@ export type AniListSort =
   | 'TRENDING_DESC'
   | 'POPULARITY_DESC'
   | 'FAVOURITES_DESC'
-  | 'SCORE_DESC';
+  | 'SCORE_DESC'
+  | 'START_DATE_DESC';
 
 export type AniListStatus = 'RELEASING' | 'FINISHED' | 'NOT_YET_RELEASED';
 
@@ -384,6 +385,153 @@ export async function fetchMediaById(anilistId: number): Promise<AniListMedia | 
   const media = normaliseMedia(data?.Media);
   if (media) writeCache(cacheKey, media);
   return media;
+}
+
+/**
+ * A page of a live ranking, with the filters applied upstream.
+ *
+ * `fetchRanked` above returns bare ids for the homepage rails, which then get
+ * hydrated from `anime_index`. Browse can't work that way: hydration silently
+ * drops any id missing from our snapshot, which is fine when you are filling
+ * eight cards from a pool of fifty but not when the page claims to show
+ * "all trending" — the counts would never add up and page 40 could come back
+ * half empty. So this returns full media and Browse renders it directly.
+ */
+const RANKED_PAGE_QUERY = `
+  query (
+    $page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus,
+    $genres: [String], $excludeGenres: [String],
+    $season: MediaSeason, $seasonYear: Int,
+    $startFrom: FuzzyDateInt, $startTo: FuzzyDateInt
+  ) {
+    Page(page: $page, perPage: $perPage) {
+      pageInfo { hasNextPage }
+      media(
+        type: ANIME
+        sort: $sort
+        status: $status
+        genre_in: $genres
+        genre_not_in: $excludeGenres
+        season: $season
+        seasonYear: $seasonYear
+        startDate_greater: $startFrom
+        startDate_lesser: $startTo
+        isAdult: false
+      ) {
+        ${MEDIA_FIELDS}
+      }
+    }
+  }
+`;
+
+export interface RankedPageParams {
+  sort: AniListSort;
+  page: number;
+  perPage: number;
+  status?: AniListStatus;
+  genres?: string[];
+  /**
+   * Genres to exclude upstream. Done in the query rather than by filtering the
+   * response so pages come back full — dropping rows client-side would leave
+   * short, ragged pages.
+   */
+  excludeGenres?: string[];
+  /** Display-cased ("Winter"); mapped to AniList's enum internally. */
+  season?: string;
+  year?: number;
+}
+
+export interface RankedPage {
+  media: AniListMedia[];
+  /**
+   * Authoritative. `pageInfo.total` deliberately is not exposed: AniList
+   * reports it as an estimate that changes as you page. The same Fall-2026
+   * query returned total=5000/lastPage=500 on page 1, total=89/lastPage=9 on
+   * page 9 (the true figure), and total=290 with zero results on page 30.
+   * Only "is there another page" can be relied on, so that is all Browse gets
+   * — and an empty page means the end regardless of what the flag claims.
+   */
+  hasNextPage: boolean;
+}
+
+/**
+ * Ranked pages are memoised in memory rather than localStorage. Each entry is
+ * a full page of media (~25KB), and the filter combinations a visitor clicks
+ * through are effectively unbounded — persisting them would burn the storage
+ * quota and evict the small, genuinely reusable caches above.
+ */
+const rankedPageMemo = new Map<string, RankedPage>();
+const RANKED_PAGE_MEMO_MAX = 40;
+
+const SEASON_ENUM: Record<string, string> = {
+  winter: 'WINTER',
+  spring: 'SPRING',
+  summer: 'SUMMER',
+  fall: 'FALL',
+};
+
+export async function fetchRankedPage(
+  params: RankedPageParams
+): Promise<RankedPage | null> {
+  const { sort, page, perPage, status, genres, excludeGenres, season, year } = params;
+  const key = JSON.stringify([
+    sort, page, perPage, status, genres, excludeGenres, season, year, utcDay(),
+  ]);
+  const memo = rankedPageMemo.get(key);
+  if (memo) return memo;
+
+  const seasonEnum = season ? SEASON_ENUM[season.toLowerCase()] : undefined;
+
+  // A year on its own is a start-date range, not a season year: seasonYear is
+  // null for movies, OVAs and specials, so filtering on it would quietly hide
+  // every non-seasonal release. When a season *is* chosen the pair is the
+  // correct model, and AniList indexes it far better than a date range.
+  const useSeasonYear = Boolean(seasonEnum && year);
+
+  const data = await anilistRequest<{
+    Page: {
+      pageInfo: { hasNextPage: boolean };
+      media: unknown[];
+    };
+  }>(
+    RANKED_PAGE_QUERY,
+    {
+      page,
+      perPage: Math.min(perPage, 50),
+      sort: [sort],
+      status,
+      genres: genres?.length ? genres : undefined,
+      excludeGenres: excludeGenres?.length ? excludeGenres : undefined,
+      season: seasonEnum,
+      seasonYear: useSeasonYear ? year : undefined,
+      startFrom: !useSeasonYear && year ? year * 10000 - 1 : undefined,
+      startTo: !useSeasonYear && year ? (year + 1) * 10000 : undefined,
+    },
+    // Browse is a full page load, not a type-ahead, so it can wait longer than
+    // the search box — but not indefinitely, or a stalled request leaves the
+    // grid on skeletons with no fallback ever running.
+    8000
+  );
+
+  if (!data?.Page) return null;
+
+  const media = (data.Page.media ?? [])
+    .map(normaliseMedia)
+    .filter((m): m is AniListMedia => m !== null);
+
+  const result: RankedPage = {
+    media,
+    // An empty page is the end of the road whatever the flag says — AniList
+    // keeps reporting hasNextPage past the point where it stops returning rows.
+    hasNextPage: media.length > 0 && Boolean(data.Page.pageInfo?.hasNextPage),
+  };
+
+  if (rankedPageMemo.size >= RANKED_PAGE_MEMO_MAX) {
+    const oldest = rankedPageMemo.keys().next().value;
+    if (oldest !== undefined) rankedPageMemo.delete(oldest);
+  }
+  rankedPageMemo.set(key, result);
+  return result;
 }
 
 export interface MalScore {

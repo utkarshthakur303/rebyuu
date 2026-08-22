@@ -19,7 +19,16 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   if (!user) {
-    return <Navigate to="/login" replace state={{ from: location.pathname }} />
+    // Carries the query string, not just the pathname. /browse is protected, so
+    // every "View More" on the homepage passes through here — sending back a
+    // bare pathname dropped the sort and filters the visitor actually clicked.
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={{ from: location.pathname + location.search }}
+      />
+    )
   }
 
   return children

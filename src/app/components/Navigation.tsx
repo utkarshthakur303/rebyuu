@@ -279,15 +279,21 @@ export function Navigation() {
   useEffect(() => {
     if (!searchQuery) {
       if (location.pathname === '/browse' && new URLSearchParams(location.search).get('q')) {
-        navigate('/browse', { replace: true });
+        // Drop only `q`. Rebuilding the URL as a bare "/browse" also discarded
+        // the genre, year, season, status and sort the visitor had set, so
+        // clearing the search box quietly reset the whole page.
+        const params = new URLSearchParams(location.search);
+        params.delete('q');
+        params.delete('page');
+        navigate({ pathname: '/browse', search: params.toString() }, { replace: true });
       }
       return;
     }
-    
+
     if (location.pathname !== '/browse') {
       return;
     }
-    
+
     const t = window.setTimeout(() => {
       const currentPath = window.location.pathname;
       const q = searchQuery.trim();
@@ -295,7 +301,11 @@ export function Navigation() {
       if (currentPath !== '/browse') {
         return;
       }
-      navigate(`/browse?q=${encodeURIComponent(q)}`, { replace: true });
+      const params = new URLSearchParams(window.location.search);
+      params.set('q', q);
+      // A new query is a new result set; whatever page you were on is gone.
+      params.delete('page');
+      navigate({ pathname: '/browse', search: params.toString() }, { replace: true });
     }, 300);
     return () => {
       window.clearTimeout(t);
@@ -356,7 +366,15 @@ export function Navigation() {
         const q = searchQuery.trim();
         setShowSuggestions(false);
         setMobileSearchOpen(false);
-        navigate(q ? `/browse?q=${encodeURIComponent(q)}` : '/browse');
+        // Searching from within Browse keeps the filters already applied;
+        // searching from anywhere else starts clean.
+        const params = new URLSearchParams(
+          window.location.pathname === '/browse' ? window.location.search : ''
+        );
+        if (q) params.set('q', q);
+        else params.delete('q');
+        params.delete('page');
+        navigate({ pathname: '/browse', search: params.toString() });
         return;
       }
       if (e.key === 'Escape') {

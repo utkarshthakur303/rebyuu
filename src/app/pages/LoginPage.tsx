@@ -2,11 +2,24 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 export default function LoginPage() {
   const { login, signup, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  /**
+   * Where ProtectedRoute bounced the visitor from, so signing in resumes the
+   * thing they were trying to do. Only same-origin paths are honoured — this
+   * value reaches the router from navigation state, so an absolute or
+   * protocol-relative URL here would be an open redirect.
+   */
+  const from = (() => {
+    const raw = (location.state as { from?: unknown } | null)?.from;
+    if (typeof raw !== 'string') return '/profile';
+    return raw.startsWith('/') && !raw.startsWith('//') ? raw : '/profile';
+  })();
   const [isLogin, setIsLogin] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -27,7 +40,7 @@ export default function LoginPage() {
       } else {
         await signup(formData.email, formData.password, formData.username);
       }
-      navigate('/profile');
+      navigate(from, { replace: true });
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {

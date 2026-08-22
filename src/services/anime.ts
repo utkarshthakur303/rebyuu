@@ -2,8 +2,11 @@ import { supabase } from './supabase';
 import {
   fetchMediaById,
   fetchRanked,
+  fetchRankedPage,
   searchAnime,
   type AniListMedia,
+  type AniListSort,
+  type AniListStatus,
   type RankedEntry,
 } from './anilist';
 
@@ -280,14 +283,28 @@ export async function getRandomActionAnime(poolSize: number = 40): Promise<Anime
   return pool;
 }
 
+/**
+ * AniList's complete non-adult genre vocabulary, which is what `anime_index`
+ * actually stores.
+ *
+ * The previous list was a hand-picked subset of 13 and silently stranded five
+ * whole genres — Mecha alone covers ~900 titles that no filter could reach.
+ * Anything not on this list is unreachable in Browse, so it tracks the source
+ * vocabulary rather than taste.
+ */
 export const genres = [
   'Action',
   'Adventure',
   'Comedy',
   'Drama',
+  'Ecchi',
   'Fantasy',
   'Horror',
+  'Mahou Shoujo',
+  'Mecha',
+  'Music',
   'Mystery',
+  'Psychological',
   'Romance',
   'Sci-Fi',
   'Slice of Life',
@@ -296,11 +313,66 @@ export const genres = [
   'Thriller'
 ];
 
-export const years = Array.from({ length: 25 }, (_, i) => 2024 - i);
+/**
+ * Genres withheld from the catalogue.
+ *
+ * The sync passes `isAdult: false`, but AniList treats that flag as separate
+ * from the Hentai tag, so 1,633 explicitly tagged rows made it into the table
+ * anyway and were reachable through Browse and search. Filtered at query time
+ * rather than at sync time so the rule applies to rows already stored.
+ */
+export const EXCLUDED_GENRES = ['Hentai'];
+
+/** Year range offered in the filters, newest first. */
+const CURRENT_YEAR = new Date().getFullYear();
+/**
+ * Spans the whole catalogue: the oldest row is dated 1907 and the newest 2033,
+ * because upcoming shows are announced years ahead.
+ *
+ * The old fixed `2024 - i` list ran 2024→2000, which stranded ~1,150 titles
+ * from 2025 onward and ~240 from before 2000 — none of them reachable by any
+ * filter. Derived from the clock so it cannot silently expire again.
+ */
+export const years = Array.from(
+  { length: CURRENT_YEAR + 2 - 1900 + 1 },
+  (_, i) => CURRENT_YEAR + 2 - i
+);
 
 export const seasons = ['Winter', 'Spring', 'Summer', 'Fall'];
 
 export const statuses = ['all', 'airing', 'completed', 'upcoming'] as const;
+
+/**
+ * Browse orderings.
+ *
+ * `rating` is served by Postgres against our own snapshot; every other mode is
+ * a live AniList ranking, which is the same source the homepage rails use. That
+ * is what lets "View More" on Trending open a Browse that is genuinely the
+ * trending list continued, rather than the whole archive sorted by score.
+ */
+export const BROWSE_SORTS = [
+  { id: 'trending', label: 'Trending', anilist: 'TRENDING_DESC' },
+  { id: 'popularity', label: 'Most Popular', anilist: 'POPULARITY_DESC' },
+  { id: 'favorites', label: 'Fan Favorites', anilist: 'FAVOURITES_DESC' },
+  { id: 'score', label: 'Top Rated', anilist: 'SCORE_DESC' },
+  { id: 'newest', label: 'Newest', anilist: 'START_DATE_DESC' },
+  { id: 'rating', label: 'Archive Score', anilist: null },
+] as const;
+
+export type BrowseSort = (typeof BROWSE_SORTS)[number]['id'];
+
+export const DEFAULT_BROWSE_SORT: BrowseSort = 'trending';
+
+export function isBrowseSort(value: string): value is BrowseSort {
+  return BROWSE_SORTS.some((s) => s.id === value);
+}
+
+/** Our three-state `status` mapped onto AniList's enum. */
+const STATUS_TO_ANILIST: Record<string, AniListStatus> = {
+  airing: 'RELEASING',
+  completed: 'FINISHED',
+  upcoming: 'NOT_YET_RELEASED',
+};
 
 export interface EpisodeRating {
   id: string;
@@ -597,6 +669,9 @@ export async function getAnimeSearchSuggestions(
   const localBroad = (async (): Promise<Anime[]> => {
     try {
       let builder = supabase.from('anime_index').select(COLUMNS);
+      for (const genre of EXCLUDED_GENRES) {
+        builder = builder.not('genres', 'cs', `{${genre}}`);
+      }
 
       // Chained ilike filters are ANDed, so "spy family" matches "SPY x FAMILY"
       // even though the words aren't adjacent.
@@ -629,9 +704,11 @@ export async function getAnimeSearchSuggestions(
    */
   const localPrefix = (async (): Promise<Anime[]> => {
     try {
-      const { data, error } = await supabase
-        .from('anime_index')
-        .select(COLUMNS)
+      let builder = supabase.from('anime_index').select(COLUMNS);
+      for (const genre of EXCLUDED_GENRES) {
+        builder = builder.not('genres', 'cs', `{${genre}}`);
+      }
+      const { data, error } = await builder
         .ilike('title', `${escapeLike(q)}%`)
         .order('rating', { ascending: false, nullsFirst: false })
         .limit(12);
@@ -690,21 +767,127 @@ export async function getAnimeSearchSuggestions(
     }
   });
 
-  return rankSuggestions([...merged.values()], q, limit);
+  // AniList's own `isAdult: false` does not cover everything carrying the
+  // Hentai tag, so the remote half of the merge is filtered here too — the
+  // local half was already excluded at query time.
+  const safe = [...merged.values()].filter(
+    (c) => !c.row.genres?.some((g) => EXCLUDED_GENRES.includes(g))
+  );
+
+  return rankSuggestions(safe, q, limit);
 }
 
+export interface BrowseFilters {
+  genres?: string[];
+  year?: number;
+  season?: string;
+  status?: string;
+  query?: string;
+  sort?: BrowseSort;
+}
+
+export interface BrowseResult {
+  data: Anime[];
+  hasMore: boolean;
+  /**
+   * `null` when the count is unknowable, which is the case for every live
+   * AniList ordering — see `RankedPage.hasNextPage`. Callers must render the
+   * unknown case rather than printing a zero.
+   */
+  totalCount: number | null;
+  totalPages: number | null;
+  /** True when the rows came from AniList rather than our snapshot. */
+  live: boolean;
+}
+
+/**
+ * One page of Browse.
+ *
+ * Two engines behind one signature:
+ *
+ *   - A live AniList ranking, used for every ordering except `rating`. Filters
+ *     are pushed upstream so the ranking is genuinely of the filtered set, and
+ *     the rows are rendered straight from the response — no hydration against
+ *     `anime_index`, which would drop anything the last sync missed and leave
+ *     short pages. This is what keeps Browse current between syncs.
+ *
+ *   - Postgres over `anime_index`, used for `rating` and for any text search,
+ *     where relevance and an exact count matter more than recency.
+ *
+ * The live path falls back to the Postgres one on any failure, so an AniList
+ * outage degrades the ordering rather than emptying the page.
+ */
 export async function getAnimeListPaginated(
-  filters?: {
-    genres?: string[];
-    year?: number;
-    season?: string;
-    status?: string;
-    query?: string;
-  },
+  filters?: BrowseFilters,
   page: number = 1,
   pageSize: number = 24
-): Promise<{ data: Anime[]; hasMore: boolean; totalCount: number; totalPages: number }> {
+): Promise<BrowseResult> {
+  const sort = filters?.sort ?? DEFAULT_BROWSE_SORT;
+  const hasQuery = Boolean(filters?.query && filters.query.trim());
+  const anilistSort = BROWSE_SORTS.find((s) => s.id === sort)?.anilist ?? null;
+
+  // A text search always goes to Postgres: AniList's SEARCH_MATCH cannot be
+  // combined with another ordering, so honouring the sort here would mean
+  // discarding relevance — the one thing a search is ordered by.
+  if (anilistSort && !hasQuery) {
+    const live = await fetchLiveBrowsePage(filters, anilistSort, page, pageSize);
+    if (live) return live;
+  }
+
+  return fetchArchiveBrowsePage(filters, page, pageSize);
+}
+
+/** Live-ranking path. Returns null on any upstream failure so a caller can fall back. */
+async function fetchLiveBrowsePage(
+  filters: BrowseFilters | undefined,
+  anilistSort: AniListSort,
+  page: number,
+  pageSize: number
+): Promise<BrowseResult | null> {
+  const status = filters?.status && filters.status !== 'all'
+    ? STATUS_TO_ANILIST[filters.status]
+    : undefined;
+
+  const result = await fetchRankedPage({
+    sort: anilistSort,
+    page,
+    // AniList caps perPage at 50; Browse asks for 24.
+    perPage: Math.min(pageSize, 50),
+    status,
+    genres: filters?.genres?.length ? filters.genres : undefined,
+    excludeGenres: EXCLUDED_GENRES,
+    season: filters?.season || undefined,
+    year: filters?.year || undefined,
+  });
+
+  // Only a null result means the request failed. An empty page is a real
+  // answer — "nothing matched", or "you have paged past the end" — and must
+  // not fall through to the archive, which would silently swap the ordering
+  // out from under the visitor rather than telling them they hit the end.
+  if (!result) return null;
+
+  return {
+    data: result.media.map(mediaToAnime),
+    hasMore: result.hasNextPage,
+    totalCount: null,
+    totalPages: null,
+    live: true,
+  };
+}
+
+/** Snapshot path: exact counts and numbered pages, ordered by stored rating. */
+async function fetchArchiveBrowsePage(
+  filters: BrowseFilters | undefined,
+  page: number,
+  pageSize: number
+): Promise<BrowseResult> {
   let query = supabase.from('anime_index').select('*', { count: 'exact' });
+
+  // Applies to every archive query, including an unfiltered browse and every
+  // text search.
+  for (const genre of EXCLUDED_GENRES) {
+    query = query.not('genres', 'cs', `{${genre}}`);
+  }
 
   if (filters?.status && filters.status !== 'all') {
     query = query.eq('status', filters.status);
@@ -740,16 +923,20 @@ export async function getAnimeListPaginated(
     // Postgres sorts DESC as NULLS FIRST, so without this every result page
     // led with unrated titles.
     .order('rating', { ascending: false, nullsFirst: false })
+    // Tie-breaker: `rating` has heavy ties (hundreds of rows share 7.0) and
+    // Postgres gives no stable order within them, so the same row could appear
+    // on two different pages while another never appeared at all.
+    .order('id', { ascending: true })
     .range(from, to);
 
   if (error) {
     console.error('Error fetching anime:', error);
-    return { data: [], hasMore: false, totalCount: 0, totalPages: 0 };
+    return { data: [], hasMore: false, totalCount: 0, totalPages: 0, live: false };
   }
 
   const totalCount = count || 0;
-  const totalPages = Math.ceil(totalCount / pageSize);
+  const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const hasMore = totalCount > to + 1;
 
-  return { data: data || [], hasMore, totalCount, totalPages };
+  return { data: data || [], hasMore, totalCount, totalPages, live: false };
 }

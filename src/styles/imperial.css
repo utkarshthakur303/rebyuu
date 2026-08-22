@@ -547,11 +547,34 @@
   }
 }
 
+/* ── Hero headline link ──────────────────────────────────
+   The hero title opens its anime. Underlined only on hover so the flat
+   poster composition is undisturbed at rest; `0.06em` clears the descenders
+   on the condensed display face. */
+.hero-title-link {
+  text-decoration: none;
+  text-underline-offset: 0.06em;
+  transition: opacity 0.2s ease;
+}
+
+.hero-title-link:hover,
+.hero-title-link:focus-visible {
+  text-decoration: underline;
+  text-decoration-thickness: 0.04em;
+  opacity: 0.82;
+}
+
 /* ── Responsive ──────────────────────────────────────── */
 @media (max-width: 768px) {
   .imperial-card:hover,
   .btn-imperial:hover,
   .btn-imperial-outline:hover {
     transform: none;
+  }
+
+  /* Touch devices have no hover state; the underline would stick after a tap. */
+  .hero-title-link:hover {
+    text-decoration: none;
+    opacity: 1;
   }
 }
