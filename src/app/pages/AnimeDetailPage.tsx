@@ -194,7 +194,14 @@ export default function AnimeDetailPage() {
             src={anime.banner_image || anime.cover_image || ''}
             alt={anime?.title || 'Anime'}
             className="h-full w-full object-cover"
-            loading="lazy"
+            /* This element was measured as the LCP on both desktop and mobile,
+               and it was marked loading="lazy" — the page was explicitly telling
+               the browser to deprioritise the one fetch that decides its score.
+               eager + high priority is the whole fix. It cannot be preloaded in
+               the document head as well, because the URL is not knowable until
+               the anime row has been fetched. */
+            loading="eager"
+            fetchPriority="high"
             decoding="async"
             onError={(e) => {
               const target = e.target as HTMLImageElement
