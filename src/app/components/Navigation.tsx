@@ -174,7 +174,15 @@ const SearchSuggestions = memo(function SearchSuggestions({
 export function Navigation() {
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = useState('');
+  // Seeded from the URL, not empty. The effect below reads an empty box on
+  // /browse?q=... as "the visitor just cleared the search" and strips q, so
+  // starting empty silently discarded the query on every direct load — a
+  // shared or crawled search link landed on unfiltered results.
+  const [searchQuery, setSearchQuery] = useState(() =>
+    window.location.pathname === '/browse'
+      ? new URLSearchParams(window.location.search).get('q') ?? ''
+      : ''
+  );
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<Anime[]>([]);
@@ -187,7 +195,7 @@ export function Navigation() {
   const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
   /** Monotonic id of the most recent suggestion request; older ones are dropped. */
   const latestRequestRef = useRef(0);
-  const { user, logout } = useAuth();
+  const { user, isAdmin, logout } = useAuth();
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -205,7 +213,9 @@ export function Navigation() {
       { path: '/profile', label: 'Profile', icon: User },
       { path: '/lists', label: 'Lists', icon: List }
     ] : []),
-    { path: '/admin', label: 'Admin', icon: Shield }
+    // Admins only. This sat outside the auth conditional, so every visitor —
+    // signed out included — was handed a link to the moderation panel.
+    ...(isAdmin ? [{ path: '/admin', label: 'Admin', icon: Shield }] : [])
   ];
 
   const fetchSuggestions = useCallback(async (query: string) => {
@@ -302,6 +312,9 @@ export function Navigation() {
         return;
       }
       const params = new URLSearchParams(window.location.search);
+      // Already in sync: this is the seeded mount, not a keystroke. Rewriting
+      // here would drop `page` and break a deep link into a search's page N.
+      if (params.get('q') === q) return;
       params.set('q', q);
       // A new query is a new result set; whatever page you were on is gone.
       params.delete('page');

@@ -1,6 +1,9 @@
 import { Link } from 'react-router-dom';
+import { useAuth } from '@/context/AuthContext';
 
 export function Footer() {
+  const { user } = useAuth();
+
   return (
     <footer className="relative border-t border-ink bg-obsidian pb-20 md:pb-0">
       {/* Atmospheric gradient */}
@@ -40,7 +43,7 @@ export function Footer() {
               {[
                 { to: '/', label: 'Discover' },
                 { to: '/browse', label: 'Browse' },
-                { to: '/login', label: 'Join Archive' },
+                ...(user ? [] : [{ to: '/login', label: 'Join Archive' }]),
               ].map(item => (
                 <Link
                   key={item.to}
@@ -54,7 +57,8 @@ export function Footer() {
             </nav>
           </div>
 
-          {/* Info Column */}
+          {/* Info Column — the visitor's own pages, so signed-in only. */}
+          {user && (
           <div>
             <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-orange mb-4" style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>
               Archive
@@ -63,7 +67,6 @@ export function Footer() {
               {[
                 { to: '/profile', label: 'Profile' },
                 { to: '/lists', label: 'Collections' },
-                { to: '/admin', label: 'Governance' },
               ].map(item => (
                 <Link
                   key={item.to}
@@ -76,6 +79,7 @@ export function Footer() {
               ))}
             </nav>
           </div>
+          )}
         </div>
 
         {/* Bottom Bar */}

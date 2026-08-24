@@ -11,6 +11,7 @@ import LoginPage from '@/app/pages/LoginPage';
 import AdminPage from '@/app/pages/AdminPage';
 import ListsPage from '@/app/pages/ListsPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
+import AdminRoute from '@/app/components/AdminRoute';
 import Toaster from '@/app/components/Toaster';
 import { TitleLangProvider } from '@/context/TitleLangContext';
 import { Analytics } from "@vercel/analytics/next"
@@ -39,12 +40,12 @@ export default function App() {
           <main className="relative z-10">
             <Routes>
               <Route path="/" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
-              <Route path="/browse" element={<ErrorBoundary><ProtectedRoute><BrowsePage /></ProtectedRoute></ErrorBoundary>} />
+              <Route path="/browse" element={<ErrorBoundary><BrowsePage /></ErrorBoundary>} />
               <Route path="/anime/:id" element={<ErrorBoundary><AnimeDetailPage /></ErrorBoundary>} />
               <Route path="/profile" element={<ErrorBoundary><ProtectedRoute><ProfilePage /></ProtectedRoute></ErrorBoundary>} />
               <Route path="/lists" element={<ErrorBoundary><ProtectedRoute><ListsPage /></ProtectedRoute></ErrorBoundary>} />
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
-              <Route path="/admin" element={<ErrorBoundary><AdminPage /></ErrorBoundary>} />
+              <Route path="/admin" element={<ErrorBoundary><AdminRoute><AdminPage /></AdminRoute></ErrorBoundary>} />
             </Routes>
           </main>
           <Footer />
