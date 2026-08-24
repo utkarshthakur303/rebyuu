@@ -421,21 +421,29 @@ export function HeroSection() {
 
         {/* Rotation progress ticks */}
         {pool.length > 1 && (
-          <div className="mt-4 flex items-center gap-1.5">
+          <div className="mt-1.5 flex items-center gap-1.5">
             {/* One tick per pooled title. This previously sliced to 12 while
                 comparing against `index % 12`, so the active tick drifted out
                 of sync once the pool ran past twelve entries. */}
             {pool.map((a, i) => (
+              /* The tick stays 4px tall — that is the design. What changed is
+                 the hit area: the button is now a transparent 24px-tall strip
+                 with the bar drawn inside it, because a 29x4 target is not
+                 tappable by any thumb. Nothing moves visually: the padding is
+                 vertical and the row already sits in its own flex line. */
               <button
                 key={a.id}
                 onClick={() => setIndex(i)}
                 aria-label={`Show ${a.title}`}
-                className="h-1 flex-1 transition-opacity hover:opacity-100"
-                style={{
-                  backgroundColor: INK,
-                  opacity: i === index ? 0.9 : 0.18,
-                }}
-              />
+                className="flex-1 flex items-center py-2.5 bg-transparent transition-opacity hover:opacity-100"
+                style={{ opacity: i === index ? 0.9 : 0.18 }}
+              >
+                <span
+                  aria-hidden="true"
+                  className="block h-1 w-full"
+                  style={{ backgroundColor: INK }}
+                />
+              </button>
             ))}
           </div>
         )}

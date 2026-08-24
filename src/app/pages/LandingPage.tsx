@@ -86,7 +86,7 @@ export default function LandingPage() {
           </div>
           <Link
             to={viewMoreTo}
-            className="text-xs font-medium tracking-[0.1em] uppercase text-gold/60 hover:text-gold transition-colors duration-300 shrink-0 border-b border-ink/35 hover:border-ink/70 pb-0.5"
+            className="inline-flex items-center min-h-[24px] py-1 text-xs font-medium tracking-[0.1em] uppercase text-gold/60 hover:text-gold transition-colors duration-300 shrink-0 border-b border-ink/35 hover:border-ink/70"
             style={{ fontFamily: 'Outfit, sans-serif' }}
           >
             View All

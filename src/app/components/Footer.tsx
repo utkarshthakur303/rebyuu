@@ -52,7 +52,7 @@ export function Footer() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="block text-sm text-parchment/70 hover:text-orange transition-colors duration-300"
+                  className="flex items-center min-h-[24px] text-sm text-parchment/70 hover:text-orange transition-colors duration-300"
                   style={{ fontFamily: 'Outfit, sans-serif' }}
                 >
                   {item.label}
@@ -75,7 +75,7 @@ export function Footer() {
                 <Link
                   key={item.to}
                   to={item.to}
-                  className="block text-sm text-parchment/70 hover:text-orange transition-colors duration-300"
+                  className="flex items-center min-h-[24px] text-sm text-parchment/70 hover:text-orange transition-colors duration-300"
                   style={{ fontFamily: 'Outfit, sans-serif' }}
                 >
                   {item.label}
