@@ -15,7 +15,7 @@
   "rewrites": [
     {
       "source": "/",
-      "destination": "/index.html"
+      "destination": "/api/render?route=home"
     },
     {
       "source": "/browse",
@@ -51,7 +51,7 @@
     },
     {
       "source": "/anime/:id(anilist-\\d+)",
-      "destination": "/index.html"
+      "destination": "/api/render?route=anime&id=:id"
     }
   ],
   "headers": [
