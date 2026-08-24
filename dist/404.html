@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, follow" />
+    <title>404 — Not in the archive · Rebyuu</title>
+    <meta name="description" content="This page is not part of the Rebyuu archive." />
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Anton&family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600&display=swap"
+    />
+    <style>
+      :root { --paper:#edebe4; --ink:#0a0a0a; --orange:#ff7a18; }
+      *{ box-sizing:border-box; }
+      body {
+        margin:0; min-height:100vh; background:var(--paper); color:var(--ink);
+        font-family:'Outfit', ui-sans-serif, system-ui, sans-serif;
+        display:flex; flex-direction:column; align-items:center; justify-content:center;
+        padding:32px 20px; text-align:center;
+      }
+      .stripe {
+        position:fixed; top:0; left:0; right:0; height:14px;
+        background-image:repeating-linear-gradient(45deg, var(--ink) 0 14px, var(--orange) 14px 28px);
+      }
+      .code {
+        font-family:'Anton', Impact, sans-serif; font-size:clamp(84px, 22vw, 200px);
+        line-height:.85; letter-spacing:-.02em; margin:0;
+      }
+      .rule { width:64px; height:4px; background:var(--orange); margin:28px auto; }
+      h1 {
+        font-family:'Anton', Impact, sans-serif; font-weight:400;
+        font-size:clamp(22px, 4.4vw, 34px); letter-spacing:.01em;
+        text-transform:uppercase; margin:0 0 14px;
+      }
+      p { max-width:46ch; margin:0 auto; font-size:16px; line-height:1.6; opacity:.75; }
+      .actions { margin-top:36px; display:flex; flex-wrap:wrap; gap:12px; justify-content:center; }
+      a.btn {
+        font-family:'JetBrains Mono', ui-monospace, monospace; font-size:12px;
+        font-weight:500; letter-spacing:.14em; text-transform:uppercase;
+        text-decoration:none; color:var(--ink); background:var(--paper);
+        border:2px solid var(--ink); padding:13px 22px;
+        box-shadow:4px 4px 0 var(--orange);
+        transition:transform .12s ease, box-shadow .12s ease;
+      }
+      a.btn:hover { transform:translate(-2px,-2px); box-shadow:6px 6px 0 var(--orange); }
+      a.btn.primary { background:var(--ink); color:var(--paper); }
+      .meta {
+        margin-top:44px; font-family:'JetBrains Mono', ui-monospace, monospace;
+        font-size:10px; letter-spacing:.2em; text-transform:uppercase; opacity:.45;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="stripe"></div>
+    <p class="code">404</p>
+    <div class="rule"></div>
+    <h1>Not in the archive</h1>
+    <p>
+      This page does not exist. The title you were looking for may have moved,
+      or the link that brought you here may have been mistyped.
+    </p>
+    <div class="actions">
+      <a class="btn primary" href="/browse">Browse the catalogue</a>
+      <a class="btn" href="/">Return home</a>
+    </div>
+    <p class="meta">Rebyuu · HTTP 404</p>
+  </body>
+</html>

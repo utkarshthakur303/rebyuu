@@ -10,6 +10,7 @@ import ProfilePage from '@/app/pages/ProfilePage';
 import LoginPage from '@/app/pages/LoginPage';
 import AdminPage from '@/app/pages/AdminPage';
 import ListsPage from '@/app/pages/ListsPage';
+import NotFoundPage from '@/app/pages/NotFoundPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import AdminRoute from '@/app/components/AdminRoute';
 import Toaster from '@/app/components/Toaster';
@@ -46,6 +47,10 @@ export default function App() {
               <Route path="/lists" element={<ErrorBoundary><ProtectedRoute><ListsPage /></ProtectedRoute></ErrorBoundary>} />
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
               <Route path="/admin" element={<ErrorBoundary><AdminRoute><AdminPage /></AdminRoute></ErrorBoundary>} />
+              {/* Reached only by client-side navigation to an unknown route.
+                  A direct request never gets here — vercel.json rewrites the
+                  seven real routes and lets everything else 404 at the edge. */}
+              <Route path="*" element={<ErrorBoundary><NotFoundPage /></ErrorBoundary>} />
             </Routes>
           </main>
           <Footer />

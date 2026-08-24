@@ -1,9 +1,11 @@
 {
-    "rewrites": [
-      {
-        "source": "/(.*)",
-        "destination": "/index.html"
-      }
-    ]
-  }
-  
+  "rewrites": [
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/browse", "destination": "/index.html" },
+    { "source": "/login", "destination": "/index.html" },
+    { "source": "/profile", "destination": "/index.html" },
+    { "source": "/lists", "destination": "/index.html" },
+    { "source": "/admin", "destination": "/index.html" },
+    { "source": "/anime/:id(anilist-\\d+)", "destination": "/index.html" }
+  ]
+}

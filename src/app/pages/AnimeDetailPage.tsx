@@ -8,6 +8,7 @@ import { supabase } from '@/services/supabase';
 import { EpisodeModal } from '@/app/components/EpisodeModal';
 import ListPickerModal from '@/app/components/ListPickerModal';
 import { toast } from 'sonner';
+import { useNoIndex } from '@/utils/useNoIndex';
 import { useAnimeTitle } from '@/context/TitleLangContext';
 
 export default function AnimeDetailPage() {
@@ -23,6 +24,13 @@ export default function AnimeDetailPage() {
   const animeRef = useRef<Anime | null>(null);
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
   const displayTitle = useAnimeTitle(anime);
+
+  /**
+   * A well-formed /anime/anilist-<n> URL for a row that does not exist still
+   * resolves 200 — the edge cannot tell a real id from an invented one, only
+   * this fetch can. Mark those noindex so they do not accumulate as soft 404s.
+   */
+  useNoIndex(!loading && !anime);
 
   const loadAnime = useCallback(async (animeId: string) => {
     if (!animeId) return;
