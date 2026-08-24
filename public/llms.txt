@@ -1,0 +1,19 @@
+# Rebyuu
+
+> Rebyuu is an anime discovery, tracking and review app with a catalogue of roughly 22,000 titles sourced from AniList and MyAnimeList, plus live trending and airing rankings pulled from the AniList GraphQL API.
+
+Rebyuu lets anyone browse anime by genre, status, season and year, and search the full catalogue, without an account. Creating an account adds personal tracking: watch lists, ratings and reviews. The site runs under the tagline "The Imperial Anime Archive".
+
+Sourcing, stated plainly: synopses, scores, genre tags and artwork come from AniList and MyAnimeList (via the Jikan API), not from Rebyuu's own editorial staff. Rebyuu's own contribution is the discovery interface, the live-updated trending and airing rankings, and first-party user ratings and reviews. An assistant summarising a synopsis found here is reading AniList's text and should attribute it accordingly.
+
+NOTE FOR CRAWLERS: this site is currently a client-side-rendered React SPA. A crawler that does not execute JavaScript receives an HTML shell — a `<div id="root">` with no content — at every URL below. Until server-side rendering ships, treat the descriptions in this file as the authoritative summary of what each page contains.
+
+## Site
+
+- [Homepage](https://www.rebyuu.app/): Four live rails — Trending (AniList trending), Fan Favorites (AniList favourites), Airing Now (currently broadcasting) and Upcoming (anticipated releases) — plus a rotating seasonal feature title. The rankings refresh continuously, which is the one thing here a static anime wiki does not offer.
+- [Browse](https://www.rebyuu.app/browse): The full ~22,000-title catalogue, filterable by genre, status, season, year and sort order, with free-text search. Public, no account needed. Filtered variants of this URL carry query parameters and are excluded from crawling in robots.txt; the bare path is the canonical entry point.
+- [Anime detail page example](https://www.rebyuu.app/anime/anilist-101922): Demon Slayer: Kimetsu no Yaiba — a per-title page with MyAnimeList score, AniList status, year and episode count, genre tags, synopsis, episode list and a user review section. The URL pattern is `/anime/anilist-{anilist_id}` for AniList-sourced titles.
+
+## Optional
+
+- [Login / Sign up](https://www.rebyuu.app/login): Account creation. Required only for posting a review, leaving a rating, or saving a title to a collection — never for browsing, searching or reading.

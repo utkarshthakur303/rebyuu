@@ -1,0 +1,64 @@
+# https://www.rebyuu.app/robots.txt
+#
+# Reviewed 2026-08-24. Re-review whenever a route is added to src/app/App.tsx,
+# or when the /browse filter params in BrowsePage.tsx change.
+
+# -----------------------------------------------------------------------
+# Default group — applies to every crawler not given its own group below.
+# That deliberately includes Googlebot, Bingbot and every AI answer-engine
+# crawler: GPTBot, OAI-SearchBot, ChatGPT-User, ClaudeBot, Claude-User,
+# Claude-SearchBot, PerplexityBot, Perplexity-User, Google-Extended, CCBot.
+#
+# Rebyuu wants AI answer-engine citation traffic — an assistant citing and
+# linking back to a rebyuu.app page is the same value proposition as an
+# organic search referral, so none of those are singled out for a block.
+# They are deliberately NOT given their own "Allow: /" group: a crawler
+# obeys only the single most specific group that names it, so giving GPTBot
+# its own group containing just "Allow: /" would silently exempt it from
+# every Disallow below. Leaving them unnamed means they fall through to
+# this group and inherit the same rules as everyone else.
+# -----------------------------------------------------------------------
+User-agent: *
+
+# --- The faceted crawl trap -------------------------------------------
+# /browse itself is public and worth crawling: it is the catalogue entry
+# point and links out to individual title pages.
+#
+# Its filtered variants are not. BrowsePage.tsx reads seven params from the
+# URL — genre, year, season, status, sort, page and q — and every
+# combination renders a distinct 200. Treating genre as single-select that
+# is ~296,000 URLs; with real multi-genre selection and free-text q it runs
+# into the hundreds of millions, all of it near-duplicate reorderings of
+# the same catalogue. None of it should consume crawl budget.
+#
+# "?" is a literal character here, not a wildcard, so "/browse?" matches
+# every query-string variant while leaving the bare path untouched. The
+# Allow is redundant given that, but states the intent explicitly.
+Allow: /browse$
+Disallow: /browse?
+Disallow: /browse/?
+
+# --- Account and private surfaces -------------------------------------
+# No unique content for an anonymous crawler; /profile and /lists are
+# behind ProtectedRoute and /admin behind AdminRoute (session + is_admin).
+Disallow: /login
+Disallow: /profile
+Disallow: /lists
+Disallow: /admin
+
+# / and /anime/:id (~22k title pages) are intentionally NOT disallowed.
+# Only a quality-gated subset is submitted via the XML sitemap, but any
+# /anime/:id page reachable through internal links stays crawlable, so
+# Google can evaluate and promote one into the submitted tier later
+# without needing a robots.txt change.
+
+# -----------------------------------------------------------------------
+# ByteDance's crawler. Given its own group and fully blocked: a documented
+# history of ignoring crawl-delay and robots directives, and negligible
+# answer-engine citation value for this audience compared to the crawlers
+# allowed above. Revisit if that changes.
+# -----------------------------------------------------------------------
+User-agent: Bytespider
+Disallow: /
+
+Sitemap: https://www.rebyuu.app/sitemap-index.xml
