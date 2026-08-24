@@ -392,9 +392,16 @@ export default function AnimeDetailPage() {
                       <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-md bg-crimson/10 text-sm font-bold text-crimson group-hover:bg-crimson/15 transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
                         {episodeNum}
                       </div>
+                      {/* No per-episode metadata is fetched for any title — not
+                          runtimes, not episode names, not air dates. This used to
+                          render a hardcoded "24 min" under every episode of every
+                          series, which was false for most of them and, on a long
+                          run like Hunter x Hunter, accounted for 444 of the page's
+                          984 words. Padding a page with a repeated invented string
+                          is the scaled-content pattern search engines demote, so
+                          the button is now just what it honestly is: navigation. */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-foreground group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>Episode {episodeNum}</h3>
-                        <p className="text-[11px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>24 min</p>
                       </div>
                     </button>
                   );
