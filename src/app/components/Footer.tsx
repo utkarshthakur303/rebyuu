@@ -15,8 +15,12 @@ export function Footer() {
           <div className="md:col-span-2">
             <Link to="/" className="inline-block mb-4">
               <img
-                src="/rebyuu-logo.png"
+                src="/rebyuu-logo.webp"
                 alt="Rebyuu"
+                width={288}
+                height={192}
+                loading="lazy"
+                decoding="async"
                 className="h-14 w-auto object-contain opacity-80 hover:opacity-100 transition-opacity"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;

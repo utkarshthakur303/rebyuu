@@ -79,8 +79,11 @@ export default function LoginPage() {
           {/* Logo & Header */}
           <div className="mb-6 sm:mb-8 text-center">
             <img 
-              src="/rebyuu-logo.png" 
+              src="/rebyuu-logo.webp" 
               alt="Rebyuu Logo" 
+              width={288}
+              height={192}
+              decoding="async"
               className="mx-auto mb-4 h-12 w-12 sm:h-14 sm:w-14 object-contain opacity-80"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;

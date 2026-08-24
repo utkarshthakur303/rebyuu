@@ -424,8 +424,11 @@ export function Navigation() {
             aria-label="Go to homepage"
           >
             <img 
-              src="/rebyuu-logo.png" 
+              src="/rebyuu-logo.webp" 
               alt="Rebyuu Logo" 
+              width={288}
+              height={192}
+              decoding="async"
               className="h-12 w-auto sm:h-14 md:h-16 object-contain opacity-90 group-hover:opacity-100 transition-opacity duration-300"
               onError={(e) => {
                 const target = e.target as HTMLImageElement;
