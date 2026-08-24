@@ -1,21 +1,45 @@
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { Navigation } from '@/app/components/Navigation';
 import { Footer } from '@/app/components/Footer';
 import LandingPage from '@/app/pages/LandingPage';
 import BrowsePage from '@/app/pages/BrowsePage';
 import AnimeDetailPage from '@/app/pages/AnimeDetailPage';
-import ProfilePage from '@/app/pages/ProfilePage';
-import LoginPage from '@/app/pages/LoginPage';
-import AdminPage from '@/app/pages/AdminPage';
-import ListsPage from '@/app/pages/ListsPage';
+
+/**
+ * Split point. /, /browse and /anime/:id stay in the main bundle: they are
+ * the three routes an anonymous visitor and a crawler actually land on, and
+ * making them wait on a second round trip would trade a parse cost nobody
+ * notices for a latency cost everybody does.
+ *
+ * The four below are different — every one of them requires an account, so
+ * shipping them to a logged-out visitor is pure dead weight. The admin
+ * moderation console was being downloaded, parsed and executed by every
+ * anonymous reader of the homepage.
+ */
+const ProfilePage = lazy(() => import('@/app/pages/ProfilePage'));
+const LoginPage = lazy(() => import('@/app/pages/LoginPage'));
+const AdminPage = lazy(() => import('@/app/pages/AdminPage'));
+const ListsPage = lazy(() => import('@/app/pages/ListsPage'));
 import NotFoundPage from '@/app/pages/NotFoundPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import AdminRoute from '@/app/components/AdminRoute';
 import Toaster from '@/app/components/Toaster';
 import { TitleLangProvider } from '@/context/TitleLangContext';
 import { Analytics } from "@vercel/analytics/next"
+
+/** Matches the in-page loading state AnimeDetailPage already uses. */
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="text-center">
+        <div className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-ink/70 border-t-crimson mb-3" />
+        <p className="text-xs text-muted-foreground tracking-wider uppercase" style={{ fontFamily: 'Outfit, sans-serif' }}>Loading...</p>
+      </div>
+    </div>
+  );
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -39,6 +63,7 @@ export default function App() {
           <Navigation />
           <Toaster />
           <main className="relative z-10">
+            <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
               <Route path="/browse" element={<ErrorBoundary><BrowsePage /></ErrorBoundary>} />
@@ -52,6 +77,7 @@ export default function App() {
                   seven real routes and lets everything else 404 at the edge. */}
               <Route path="*" element={<ErrorBoundary><NotFoundPage /></ErrorBoundary>} />
             </Routes>
+            </Suspense>
           </main>
           <Footer />
         </div>
