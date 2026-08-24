@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { useCanonical } from '@/utils/useCanonical';
 import { Filter, X, ChevronLeft, ChevronRight, AlertTriangle, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimeCard } from '@/app/components/AnimeCard';
@@ -79,6 +80,17 @@ function toParams(state: BrowseState): URLSearchParams {
 }
 
 export default function BrowsePage() {
+  /**
+   * Every faceted variant of this page — genre, year, season, status, sort,
+   * page, q, in any combination — points at the bare path. They are all
+   * reorderings of one catalogue, and consolidating them here means a link
+   * someone shares to a filtered view still passes its weight to /browse
+   * rather than stranding it on a near-duplicate. robots.txt keeps crawlers
+   * out of that space in the first place; this covers the URLs that reach an
+   * engine by being linked or shared rather than by being crawled.
+   */
+  useCanonical('/browse');
+
   const [searchParams, setSearchParams] = useSearchParams();
   // Memoised on the serialised string, not the object: a URLSearchParams
   // instance is not guaranteed to be referentially stable across renders, and
