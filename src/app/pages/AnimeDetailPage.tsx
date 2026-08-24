@@ -2,7 +2,7 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getAnimeById, getAnimeReviews, type Anime, type Review } from '@/services/anime';
+import { getAnimeById, getAnimeReviews, getCommunityScore, type Anime, type CommunityScore, type Review } from '@/services/anime';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/services/supabase';
 import { EpisodeModal } from '@/app/components/EpisodeModal';
@@ -23,6 +23,7 @@ export default function AnimeDetailPage() {
   const [showListPicker, setShowListPicker] = useState(false);
   const animeRef = useRef<Anime | null>(null);
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
+  const [community, setCommunity] = useState<CommunityScore | null>(null);
   const displayTitle = useAnimeTitle(anime);
 
   /**
@@ -31,6 +32,15 @@ export default function AnimeDetailPage() {
    * this fetch can. Mark those noindex so they do not accumulate as soft 404s.
    */
   useNoIndex(!loading && !anime);
+
+  /* Refetched whenever the reviews list changes, since posting a review also
+     writes a rating — the displayed score would otherwise lag by a page load. */
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    getCommunityScore(id).then(score => { if (!cancelled) setCommunity(score); });
+    return () => { cancelled = true; };
+  }, [id, reviews.length]);
 
   const loadAnime = useCallback(async (animeId: string) => {
     if (!animeId) return;
@@ -293,11 +303,39 @@ export default function AnimeDetailPage() {
             </h1>
 
             <div className="mb-3 sm:mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
+              {/* Two scores, and it must be obvious which is which. The starred
+                  number is MyAnimeList's aggregate of MyAnimeList users — it was
+                  previously unlabelled, which read as though it were Rebyuu's own
+                  verdict on the title. The second is genuinely ours, appears only
+                  once enough people have rated to mean anything, and states the
+                  count so the reader can weigh it. */}
               {anime?.rating && (
                 <div className="flex items-center gap-2">
                   <Star className="h-5 w-5 star-gold" />
                   <span className="text-lg font-semibold text-gold" style={{ fontFamily: 'Outfit, sans-serif' }}>{anime.rating.toFixed(1)}</span>
                   <span className="text-muted-foreground/50 text-sm">/10</span>
+                  <span
+                    className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60"
+                    style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
+                    title="Community score from MyAnimeList users, via the Jikan API"
+                  >
+                    MAL
+                  </span>
+                </div>
+              )}
+
+              {community && (
+                <div className="flex items-center gap-2 border-l border-ink/20 pl-2 sm:pl-3">
+                  <Star className="h-5 w-5 fill-crimson text-crimson" />
+                  <span className="text-lg font-semibold text-crimson" style={{ fontFamily: 'Outfit, sans-serif' }}>{community.average.toFixed(1)}</span>
+                  <span className="text-muted-foreground/50 text-sm">/10</span>
+                  <span
+                    className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60"
+                    style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
+                    title={`Rebyuu community score from ${community.count} rating${community.count === 1 ? '' : 's'}`}
+                  >
+                    Rebyuu · {community.count}
+                  </span>
                 </div>
               )}
 
@@ -502,8 +540,22 @@ export default function AnimeDetailPage() {
             )}
 
             {!user && (
+              /* This was a dead sentence: it told logged-out readers they needed
+                 an account without giving them a way to make one. The community
+                 score above is built entirely from ratings people leave here, so
+                 a prompt that cannot be acted on suppresses the one first-party
+                 signal the page has. */
               <div className="mb-6 rounded-lg border border-ink/20 bg-card p-6 text-center">
-                <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>Please enter the archive to write a review</p>
+                <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
+                  <Link
+                    to="/login"
+                    state={{ from: `/anime/${id}` }}
+                    className="underline underline-offset-2 hover:text-orange"
+                  >
+                    Sign in
+                  </Link>
+                  {' '}to rate this title or write a review.
+                </p>
               </div>
             )}
 

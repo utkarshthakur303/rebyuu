@@ -102,6 +102,54 @@ export async function getAnimeById(id: string): Promise<Anime | null> {
   return media ? mediaToAnime(media) : null;
 }
 
+/**
+ * Rebyuu's own community score for a title: the mean of ratings left by
+ * Rebyuu accounts, plus how many it is based on.
+ *
+ * This is the only rating on a title page that is genuinely first-party. The
+ * number shown next to it elsewhere is MyAnimeList's aggregate of MyAnimeList
+ * users, which is why that one is never marked up as this page's
+ * aggregateRating — presenting another platform's verdict as your own is what
+ * review-snippet spam guidance exists to stop. This one can be, because it is
+ * ours and because the count is real.
+ *
+ * MIN_RATINGS_FOR_SCORE exists so a title does not display "10.0" off the back
+ * of one enthusiastic vote. Below the threshold the caller shows nothing,
+ * which is more honest than showing noise.
+ *
+ * Rows are fetched and averaged in the browser rather than aggregated in
+ * Postgres. At present that is trivially cheap — the table is close to empty —
+ * but a title with thousands of ratings would be shipping one integer per
+ * rating to compute one number. If this ever gets real usage, move it to a
+ * view or an RPC; it is deliberately isolated here so that is a one-function
+ * change.
+ */
+export const MIN_RATINGS_FOR_SCORE = 3;
+
+export interface CommunityScore {
+  average: number;
+  count: number;
+}
+
+export async function getCommunityScore(animeId: string): Promise<CommunityScore | null> {
+  const { data, error } = await supabase
+    .from('ratings')
+    .select('rating')
+    .eq('anime_id', animeId);
+
+  if (error) {
+    if (!import.meta.env.PROD) console.error('Error fetching community score:', error);
+    return null;
+  }
+  if (!data || data.length < MIN_RATINGS_FOR_SCORE) return null;
+
+  const total = data.reduce((sum, row) => sum + (row.rating ?? 0), 0);
+  return {
+    average: Math.round((total / data.length) * 10) / 10,
+    count: data.length,
+  };
+}
+
 export async function getAnimeReviews(animeId: string): Promise<Review[]> {
   const { data, error } = await supabase
     .from('comments')
