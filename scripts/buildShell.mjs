@@ -12,7 +12,7 @@
  * Runs after `vite build`. dist/ is committed in this repo, and so is the
  * generated file, so the two never disagree.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, writeFileSync, renameSync, existsSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,3 +27,25 @@ export const SHELL = ${JSON.stringify(html)};
 
 writeFileSync(resolve(root, 'api/_shell.js'), out);
 console.log(`buildShell: api/_shell.js written (${html.length} bytes of shell)`);
+
+/**
+ * Rename the shell so that "/" has no static file to resolve to.
+ *
+ * Vercel checks the filesystem before it applies rewrites — the same
+ * behaviour that lets public/robots.txt escape the SPA catch-all. For "/"
+ * that works against us: dist/index.html satisfies the request directly, so
+ * the rewrite sending "/" to the prerender function never fires, and the
+ * homepage keeps serving the empty shell while /anime/:id renders correctly.
+ * Verified in production: / came back as 1,623 bytes with the old shared
+ * title, /anime/anilist-101922 came back as 6,319 bytes with its own.
+ *
+ * Removing the collision is what makes the rewrite reachable. Every other
+ * route points at /app.html instead, and robots.txt disallows that path so
+ * the bare shell cannot be indexed as a duplicate.
+ */
+const built = resolve(root, 'dist/index.html');
+const shell = resolve(root, 'dist/app.html');
+if (existsSync(built)) {
+  renameSync(built, shell);
+  console.log('buildShell: dist/index.html -> dist/app.html (frees "/" for the renderer)');
+}

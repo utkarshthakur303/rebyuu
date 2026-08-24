@@ -50,6 +50,13 @@
 # anonymous crawler; /profile and /lists are behind ProtectedRoute and
 # /admin behind AdminRoute (session + is_admin).
 #
+# /app.html is the bare React shell. Every SPA route rewrites to it, but the
+# file itself is also directly reachable and would be an empty duplicate of
+# the homepage if a crawler found it, so it is disallowed. It exists under
+# that name rather than index.html because Vercel resolves the filesystem
+# before rewrites: while dist/index.html existed, "/" was satisfied by the
+# static file and never reached the prerender function.
+#
 # / and /anime/:id (~22k title pages) are intentionally NOT disallowed.
 # Only a quality-gated subset is submitted via the XML sitemap, but any
 # /anime/:id page reachable through internal links stays crawlable, so
@@ -71,6 +78,7 @@ Disallow: /login
 Disallow: /profile
 Disallow: /lists
 Disallow: /admin
+Disallow: /app.html
 
 User-agent: Bytespider
 Disallow: /

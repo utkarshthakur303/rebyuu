@@ -19,35 +19,35 @@
     },
     {
       "source": "/browse",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/login",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/profile",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/lists",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/admin",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/about",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/terms",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/privacy",
-      "destination": "/index.html"
+      "destination": "/app.html"
     },
     {
       "source": "/anime/:id(anilist-\\d+)",
