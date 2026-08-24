@@ -68,8 +68,18 @@ export function HeroSection() {
   }, [pool.length, trailerOpen]);
 
   const anime = pool[index];
+  /**
+   * youtube-nocookie.com, not youtube.com: the privacy-enhanced host does not
+   * write YouTube's tracking cookies until the viewer actually plays the
+   * video. The trailer is a convenience on someone else's platform — it should
+   * not tag every visitor who merely opens the modal. Both embeds on the site
+   * use this host, and the CSP frame-src admits it.
+   */
   const embedUrl = useMemo(
-    () => anime?.trailer?.replace('watch?v=', 'embed/') ?? null,
+    () =>
+      anime?.trailer
+        ?.replace('watch?v=', 'embed/')
+        .replace('www.youtube.com', 'www.youtube-nocookie.com') ?? null,
     [anime?.trailer]
   );
 

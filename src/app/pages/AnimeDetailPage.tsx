@@ -382,10 +382,20 @@ export default function AnimeDetailPage() {
             >
               <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Trailer</h2>
               <div className="aspect-video overflow-hidden rounded-md border border-ink/20 bg-background">
+                {/* youtube-nocookie.com so YouTube's tracking cookies are not
+                    written just because someone read a title page, and lazy
+                    because this section sits well below the fold — the eager
+                    embed was pulling in doubleclick and googleads requests on
+                    every single detail view, before anyone pressed play. */}
                 <iframe
-                  src={anime?.trailer?.replace('watch?v=', 'embed/') || ''}
+                  src={
+                    anime?.trailer
+                      ?.replace('watch?v=', 'embed/')
+                      .replace('www.youtube.com', 'www.youtube-nocookie.com') || ''
+                  }
                   title={`${displayTitle || 'Anime'} trailer`}
                   className="h-full w-full"
+                  loading="lazy"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                   allowFullScreen
                 />
