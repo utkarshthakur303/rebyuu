@@ -22,6 +22,13 @@ const ProfilePage = lazy(() => import('@/app/pages/ProfilePage'));
 const LoginPage = lazy(() => import('@/app/pages/LoginPage'));
 const AdminPage = lazy(() => import('@/app/pages/AdminPage'));
 const ListsPage = lazy(() => import('@/app/pages/ListsPage'));
+
+/* Written pages. Rarely visited, so they are chunks — but they carry the
+   trust signals (sourcing, ownership, data handling) that the catalogue
+   pages cannot, so they are indexed and linked from every page footer. */
+const AboutPage = lazy(() => import('@/app/pages/AboutPage'));
+const TermsPage = lazy(() => import('@/app/pages/TermsPage'));
+const PrivacyPage = lazy(() => import('@/app/pages/PrivacyPage'));
 import NotFoundPage from '@/app/pages/NotFoundPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import AdminRoute from '@/app/components/AdminRoute';
@@ -71,6 +78,9 @@ export default function App() {
               <Route path="/profile" element={<ErrorBoundary><ProtectedRoute><ProfilePage /></ProtectedRoute></ErrorBoundary>} />
               <Route path="/lists" element={<ErrorBoundary><ProtectedRoute><ListsPage /></ProtectedRoute></ErrorBoundary>} />
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />
+              <Route path="/about" element={<ErrorBoundary><AboutPage /></ErrorBoundary>} />
+              <Route path="/terms" element={<ErrorBoundary><TermsPage /></ErrorBoundary>} />
+              <Route path="/privacy" element={<ErrorBoundary><PrivacyPage /></ErrorBoundary>} />
               <Route path="/admin" element={<ErrorBoundary><AdminRoute><AdminPage /></AdminRoute></ErrorBoundary>} />
               {/* Reached only by client-side navigation to an unknown route.
                   A direct request never gets here — vercel.json rewrites the

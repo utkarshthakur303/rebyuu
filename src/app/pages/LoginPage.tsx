@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { motion } from 'motion/react';
 import { Mail, Lock, User, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 export default function LoginPage() {
   const { login, signup, loginWithGoogle } = useAuth();
@@ -251,8 +251,13 @@ export default function LoginPage() {
 
         {/* Footer */}
         <div className="mt-6 text-center">
+          {/* These were plain unlinked text, naming two documents that did not
+              exist anywhere in the app. Both now exist and both are linked. */}
           <p className="text-[10px] text-muted-foreground/40 tracking-wider" style={{ fontFamily: 'Outfit, sans-serif' }}>
-            By continuing, you agree to our Terms of Service and Privacy Policy
+            By continuing, you agree to our{' '}
+            <Link to="/terms" className="underline underline-offset-2 hover:text-orange">Terms of Service</Link>
+            {' '}and{' '}
+            <Link to="/privacy" className="underline underline-offset-2 hover:text-orange">Privacy Policy</Link>
           </p>
         </div>
       </motion.div>

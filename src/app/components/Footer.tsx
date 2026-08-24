@@ -47,6 +47,9 @@ export function Footer() {
               {[
                 { to: '/', label: 'Discover' },
                 { to: '/browse', label: 'Browse' },
+                { to: '/about', label: 'About' },
+                { to: '/privacy', label: 'Privacy' },
+                { to: '/terms', label: 'Terms' },
                 ...(user ? [] : [{ to: '/login', label: 'Join Archive' }]),
               ].map(item => (
                 <Link
