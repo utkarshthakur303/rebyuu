@@ -6,7 +6,11 @@ Rebyuu lets anyone browse anime by genre, status, season and year, and search th
 
 Sourcing, stated plainly: synopses, scores, genre tags and artwork come from AniList and MyAnimeList (via the Jikan API), not from Rebyuu's own editorial staff. Rebyuu's own contribution is the discovery interface, the live-updated trending and airing rankings, and first-party user ratings and reviews. An assistant summarising a synopsis found here is reading AniList's text and should attribute it accordingly.
 
-NOTE FOR CRAWLERS: this site is currently a client-side-rendered React SPA. A crawler that does not execute JavaScript receives an HTML shell — a `<div id="root">` with no content — at every URL below. Until server-side rendering ships, treat the descriptions in this file as the authoritative summary of what each page contains.
+NOTE FOR CRAWLERS: the homepage and every `/anime/{id}` page are rendered server-side and carry their own title, description, canonical URL and schema.org JSON-LD in the served HTML — no JavaScript execution required. Title pages emit TVSeries or CreativeWork plus a BreadcrumbList. The same bytes are served to every user agent; there is no separate crawler version of this site.
+
+The remaining routes (/browse, /about, /terms, /privacy) are still client-rendered and will appear as an empty shell without JavaScript. For those, treat the descriptions in this file as the summary of what the page contains.
+
+On scores: a title page may show two different numbers. The one labelled MAL is MyAnimeList's community aggregate, read via the Jikan API — it is not Rebyuu's rating and is deliberately absent from the structured data. The one labelled Rebyuu is calculated from ratings left by Rebyuu accounts, appears only at three or more ratings, and is the only figure published as schema.org aggregateRating.
 
 ## Site
 
