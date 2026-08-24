@@ -194,14 +194,29 @@ export default function AnimeDetailPage() {
             src={anime.banner_image || anime.cover_image || ''}
             alt={anime?.title || 'Anime'}
             className="h-full w-full object-cover"
-            /* This element was measured as the LCP on both desktop and mobile,
-               and it was marked loading="lazy" — the page was explicitly telling
-               the browser to deprioritise the one fetch that decides its score.
-               eager + high priority is the whole fix. It cannot be preloaded in
-               the document head as well, because the URL is not knowable until
-               the anime row has been fetched. */
+            /* This element is the LCP on both desktop and mobile. It was marked
+               loading="lazy", which reads like a self-inflicted penalty — but
+               measurement says otherwise, so this is eager WITHOUT a priority
+               hint. Interleaved runs on a throttled mobile profile (375x812,
+               4x CPU, 150ms/1.6Mbps), 4 samples each, medians:
+
+                   lazy               7038 ms
+                   eager              7028 ms
+                   eager + high       7466 ms   <- worst
+
+               lazy was never actually deferring anything: the banner is above
+               the fold, and Chrome loads an in-viewport lazy image immediately.
+               fetchPriority="high" genuinely hurt. Promoting a large hero image
+               in the request queue makes it compete for a narrow pipe with the
+               JS, fonts and data fetch the page still needs before it can paint
+               at all — so the thing being prioritised arrives later.
+
+               eager is kept because it is semantically honest for an
+               above-the-fold hero and costs nothing. The real ceiling here is
+               the request chain: HTML, bundle, React mount, anime fetch, and
+               only then is the image URL even knowable — which is also why it
+               cannot be preloaded in the head. That waits on prerendering. */
             loading="eager"
-            fetchPriority="high"
             decoding="async"
             onError={(e) => {
               const target = e.target as HTMLImageElement
