@@ -22,6 +22,10 @@
       "destination": "/api/sitemap?kind=anime&page=:page"
     },
     {
+      "source": "/sitemap-episodes.xml",
+      "destination": "/api/sitemap?kind=episodes"
+    },
+    {
       "source": "/",
       "destination": "/api/render?route=home"
     },
@@ -56,6 +60,10 @@
     {
       "source": "/privacy",
       "destination": "/api/render?route=privacy"
+    },
+    {
+      "source": "/anime/:id(anilist-\\d+)/episode/:ep(\\d+)",
+      "destination": "/api/render?route=episode&id=:id&ep=:ep"
     },
     {
       "source": "/anime/:id(anilist-\\d+)",

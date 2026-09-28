@@ -1,13 +1,12 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, getKnownTitles, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, getKnownTitles, getEpisodeActivity, type Anime, type CommunityScore, type Review } from '@/services/anime';
 import { ExtraFacts, WhereToWatch, NextEpisode, QuickAnswers, RelatedSeasons } from '@/app/components/TitleDetails';
 import { AnimeCard } from '@/app/components/AnimeCard';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/services/supabase';
-import { EpisodeModal } from '@/app/components/EpisodeModal';
 import ListPickerModal from '@/app/components/ListPickerModal';
 import { toast } from 'sonner';
 import { useNoIndex } from '@/utils/useNoIndex';
@@ -15,6 +14,8 @@ import { useAnimeTitle } from '@/context/TitleLangContext';
 import { useSeo } from '@/utils/useSeo';
 import { titleTag, metaDescription, otherNames, nameLang } from '../../../api/_titlepage.js';
 import { animePath } from '../../../api/_paths.js';
+import { lastEpisode, episodePath, isEpisodeIndexable } from '../../../api/_episodes.js';
+import { nextEpisode } from '../../../api/_titlepage.js';
 
 export default function AnimeDetailPage() {
   const { id } = useParams();
@@ -24,13 +25,14 @@ export default function AnimeDetailPage() {
   const [loading, setLoading] = useState(true);
   const [userRating, setUserRating] = useState(0);
   const [review, setReview] = useState('');
-  const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
+  const navigate = useNavigate();
   const [showListPicker, setShowListPicker] = useState(false);
   const animeRef = useRef<Anime | null>(null);
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityScore | null>(null);
   const [related, setRelated] = useState<Anime[]>([]);
   const [knownRelations, setKnownRelations] = useState<Map<string, { id: string; title: string; year: number | null }>>(new Map());
+  const [episodeActivity, setEpisodeActivity] = useState<Map<number, { comments: number; ratings: number }>>(new Map());
   const displayTitle = useAnimeTitle(anime);
   // With the JP switch on, the heading is already the romaji title.
   const aliases = anime ? otherNames(anime).filter((name: string) => name !== displayTitle) : [];
@@ -65,6 +67,7 @@ export default function AnimeDetailPage() {
     let cancelled = false;
     getRelatedAnime(anime).then(rows => { if (!cancelled) setRelated(rows); });
     getKnownTitles((anime.relations ?? []).map(r => r.id)).then(known => { if (!cancelled) setKnownRelations(known); });
+    if (lastEpisode(anime)) getEpisodeActivity(anime.id).then(act => { if (!cancelled) setEpisodeActivity(act); });
     return () => { cancelled = true; };
   }, [anime]);
 
@@ -485,8 +488,8 @@ export default function AnimeDetailPage() {
             </motion.section>
           )}
 
-          {/* Episodes */}
-          {anime?.episodes && anime.episodes > 0 && (
+          {/* Episodes — each has its own page (EpisodePage). */}
+          {anime && lastEpisode(anime) && (
             <motion.section
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -495,14 +498,14 @@ export default function AnimeDetailPage() {
             >
               <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Episodes</h2>
               <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: anime?.episodes || 0 }, (_, i) => {
+                {Array.from({ length: lastEpisode(anime) || 0 }, (_, i) => {
                   const episodeNum = i + 1;
-                  return (
-                    <button
-                      key={episodeNum}
-                      onClick={() => setSelectedEpisode(episodeNum)}
-                      className="flex items-center gap-3 sm:gap-4 rounded-md border border-ink/20 bg-card p-3 sm:p-4 text-left transition-all hover:border-ink/35 hover:shadow-lg hover:shadow-black/20 min-h-[60px] sm:min-h-[70px] group"
-                    >
+                  const path = episodePath(anime, episodeNum);
+                  const next = anime.status === 'airing' ? nextEpisode(anime) : null;
+                  const caption = next?.episode === episodeNum ? 'Next' : next && next.episode - 1 === episodeNum ? 'Latest' : null;
+                  const className = "flex items-center gap-3 sm:gap-4 rounded-md border border-ink/20 bg-card p-3 sm:p-4 text-left transition-all hover:border-ink/35 hover:shadow-lg hover:shadow-black/20 min-h-[60px] sm:min-h-[70px] group";
+                  const inner = (
+                    <>
                       <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-md bg-crimson/10 text-sm font-bold text-crimson group-hover:bg-crimson/15 transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
                         {episodeNum}
                       </div>
@@ -516,8 +519,20 @@ export default function AnimeDetailPage() {
                           the button is now just what it honestly is: navigation. */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-foreground group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>Episode {episodeNum}</h3>
+                        {caption && (
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-orange" style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>{caption}</p>
+                        )}
                       </div>
-                    </button>
+                    </>
+                  );
+                  /* Indexable episodes are real links, which crawlers follow.
+                     The rest navigate from a button, so the page does not hand
+                     crawlers hundreds of empty, noindex episode pages. See
+                     api/_episodes.js. */
+                  return isEpisodeIndexable(anime, episodeNum, episodeActivity.get(episodeNum)) ? (
+                    <Link key={episodeNum} to={path} className={className}>{inner}</Link>
+                  ) : (
+                    <button key={episodeNum} type="button" onClick={() => navigate(path)} className={className}>{inner}</button>
                   );
                 })}
               </div>
@@ -697,15 +712,6 @@ export default function AnimeDetailPage() {
         </div>
       </div>
 
-      {selectedEpisode && (
-        <EpisodeModal
-          isOpen={!!selectedEpisode}
-          onClose={() => setSelectedEpisode(null)}
-          animeId={anime?.id || ''}
-          episodeNumber={selectedEpisode || 0}
-          animeTitle={displayTitle || ''}
-        />
-      )}
       <ListPickerModal
         isOpen={showListPicker}
         onClose={() => setShowListPicker(false)}

@@ -10,6 +10,7 @@ import {
   type RankedEntry,
 } from './anilist';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from '../../api/_related.js';
+import { episodeActivity } from '../../api/_episodes.js';
 
 export interface Anime {
   id: string;
@@ -499,6 +500,20 @@ export interface EpisodeComment {
     username: string;
     avatar_url: string | null;
   };
+}
+
+/**
+ * Comment and rating counts per episode of one title — what decides which
+ * episode pages are indexable (api/_episodes.js).
+ */
+export async function getEpisodeActivity(animeId: string): Promise<Map<number, { comments: number; ratings: number }>> {
+  const [comments, ratings] = await Promise.all([
+    supabase.from('episode_comments').select('episode_number').eq('anime_id', animeId),
+    supabase.from('episode_ratings').select('episode_number').eq('anime_id', animeId),
+  ]);
+  if (comments.error) console.error('Error fetching episode comments:', comments.error);
+  if (ratings.error) console.error('Error fetching episode ratings:', ratings.error);
+  return episodeActivity(comments.data || [], ratings.data || []);
 }
 
 export async function getEpisodeRatings(animeId: string, episodeNumber: number): Promise<EpisodeRating[]> {

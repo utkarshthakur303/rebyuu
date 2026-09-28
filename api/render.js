@@ -3,6 +3,10 @@ import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_r
 import { PAGES } from './_pages.js';
 import { animePath } from './_paths.js';
 import {
+  lastEpisode, episodePath, episodeActivity, isEpisodeIndexable, indexableEpisodes,
+  episodeTitleTag, episodeDescription, MIN_EPISODE_RATINGS,
+} from './_episodes.js';
+import {
   titleTag, metaDescription, otherNames, nameLang,
   titleFacts, nextEpisode, formatAiring, relationGroups, quickAnswers,
 } from './_titlepage.js';
@@ -85,7 +89,8 @@ const ANILIST_TIMEOUT_MS = 2500;
  * get the page's head and heading without the live title lists, rather than
  * waiting on AniList for links no crawler should be collecting from them.
  */
-const isVariant = (url) => [...url.searchParams.keys()].some((k) => k !== 'route' && k !== 'id');
+const INTERNAL_PARAMS = new Set(['route', 'id', 'ep']);
+const isVariant = (url) => [...url.searchParams.keys()].some((k) => !INTERNAL_PARAMS.has(k));
 
 const escapeHtml = (s) =>
   String(s ?? '')
@@ -150,6 +155,19 @@ async function anilist(query) {
 
 /** anime_index ids for an AniList `Page { media { id } }`, in ranking order. */
 const rankedIds = (pageData) => (pageData?.media ?? []).map((m) => `anilist-${m.id}`);
+
+/** Comments shown on an episode page, newest first. */
+const THREAD_SIZE = 20;
+
+/** Comment and rating counts per episode of one title. */
+async function loadEpisodeActivity(id) {
+  const key = encodeURIComponent(id);
+  const [comments, ratings] = await Promise.all([
+    sb(`episode_comments?anime_id=eq.${key}&select=episode_number`),
+    sb(`episode_ratings?anime_id=eq.${key}&select=episode_number`),
+  ]);
+  return episodeActivity(Array.isArray(comments) ? comments : [], Array.isArray(ratings) ? ratings : []);
+}
 
 /** One anime_index read for a set of ids, as a Map keyed by id. */
 async function rowsById(ids) {
@@ -248,6 +266,14 @@ function renderTitleList({ heading, subtitle, items }) {
       </section>`;
 }
 
+/**
+ * Every indexable page allows large image previews: without this directive
+ * Google shows at most a thumbnail, and in Discover — a large source of anime
+ * traffic — a thumbnail-only card barely gets shown at all. Pages that set
+ * their own robots value (noindex) replace it.
+ */
+const DEFAULT_ROBOTS = 'max-image-preview:large';
+
 /** Replaces the shell's single shared title/description with this route's. */
 function injectHead(html, { title, description, canonical, image, ld, robots }) {
   const tags = [
@@ -270,7 +296,7 @@ function injectHead(html, { title, description, canonical, image, ld, robots }) 
     // bundle has run — impossible while the URL was only knowable in JS.
     tags.push(`<link rel="preload" as="image" href="${escapeHtml(image)}" fetchpriority="high" />`);
   }
-  if (robots) tags.push(`<meta name="robots" content="${escapeHtml(robots)}" />`);
+  tags.push(`<meta name="robots" content="${escapeHtml(robots || DEFAULT_ROBOTS)}" />`);
   if (ld) tags.push(`<script type="application/ld+json">${jsonLd(ld)}</script>`);
 
   // Drop the shell's generic tags so the document never carries two of any.
@@ -358,7 +384,7 @@ function renderHome(rails = []) {
   return injectBody(html, content);
 }
 
-function renderAnime(row, community, related = [], known = new Map()) {
+function renderAnime(row, community, related = [], known = new Map(), activity = new Map()) {
   const title = String(row.title || 'Untitled');
   const pageUrl = `${ORIGIN}${animePath(row)}`;
   const synopsis = stripTags(row.description);
@@ -490,6 +516,7 @@ function renderAnime(row, community, related = [], known = new Map()) {
       ${renderNextEpisode(row)}
       ${renderQuickAnswers(row)}
       ${renderRelations(row, known)}
+      ${renderEpisodeGuide(row, activity)}
       ${renderTitleList({ heading: 'More like this', items: related })}
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:20px"><a href="/browse">Browse more anime</a></p>
     </main>`;
@@ -616,6 +643,116 @@ function renderRelations(row, known) {
       </section>`;
 }
 
+/**
+ * The title page's episode guide: its indexable episodes only (see
+ * _episodes.js), so crawlers are led to the episode pages worth indexing.
+ */
+function renderEpisodeGuide(row, activity) {
+  const episodes = indexableEpisodes(row, activity);
+  if (!episodes.length) return '';
+  const next = row.status === 'airing' ? nextEpisode(row) : null;
+  const note = (n) =>
+    next && n === next.episode ? ' (next)' : next && n === next.episode - 1 ? ' (latest)' : '';
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')} episodes</h2>
+        <p ${P}>${episodes.map((n) => `<a href="${escapeHtml(episodePath(row, n))}">Episode ${n}</a>${note(n)}`).join(' · ')}</p>
+      </section>`;
+}
+
+/**
+ * One episode's page. `ratings` and `comments` hold the title's rows (for
+ * which neighbours are indexable); `thread` is this episode's comments with
+ * their text; `authors` maps user ids to usernames.
+ */
+function renderEpisode(row, n, { ratings, comments, thread, authors }) {
+  const title = String(row.title || 'Untitled');
+  const seriesUrl = `${ORIGIN}${animePath(row)}`;
+  const url = `${ORIGIN}${episodePath(row, n)}`;
+  const last = lastEpisode(row);
+  const activity = episodeActivity(comments, ratings);
+  const own = ratings.filter((r) => r.episode_number === n);
+  const average = own.length ? Math.round((own.reduce((sum, r) => sum + (r.rating ?? 0), 0) / own.length) * 10) / 10 : null;
+  const stats = { average, count: own.length, comments: thread.length };
+  const indexable = isEpisodeIndexable(row, n, activity.get(n));
+  const next = row.status === 'airing' ? nextEpisode(row) : null;
+
+  const episode = {
+    '@type': 'TVEpisode',
+    '@id': `${url}#episode`,
+    url,
+    name: `${title} — Episode ${n}`,
+    episodeNumber: n,
+    partOfSeries: { '@type': 'TVSeries', '@id': `${seriesUrl}#work`, name: title, url: seriesUrl },
+  };
+  if (own.length >= MIN_EPISODE_RATINGS) {
+    episode.aggregateRating = { '@type': 'AggregateRating', ratingValue: average, ratingCount: own.length, bestRating: 10, worstRating: 1 };
+  }
+  const ld = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      episode,
+      {
+        '@type': 'BreadcrumbList',
+        '@id': `${url}#breadcrumb`,
+        itemListElement: [
+          { '@type': 'ListItem', position: 1, name: 'Rebyuu', item: `${ORIGIN}/` },
+          { '@type': 'ListItem', position: 2, name: 'Browse', item: `${ORIGIN}/browse` },
+          { '@type': 'ListItem', position: 3, name: title, item: seriesUrl },
+          { '@type': 'ListItem', position: 4, name: `Episode ${n}`, item: url },
+        ],
+      },
+    ],
+  };
+
+  const neighbour = (m, label) => {
+    if (m < 1 || m > last) return '';
+    return isEpisodeIndexable(row, m, activity.get(m))
+      ? `<a href="${escapeHtml(episodePath(row, m))}" rel="${m < n ? 'prev' : 'next'}">${label}</a>`
+      : `<span>${label}</span>`;
+  };
+  const airs = next && next.episode === n
+    ? `<p ${P}>Episode ${n} airs on <time datetime="${next.at.toISOString()}">${escapeHtml(formatAiring(next.at, { timeZone: 'UTC' }))}</time>.</p>`
+    : '';
+  const score = own.length >= MIN_EPISODE_RATINGS
+    ? `<p ${P}><strong>Rebyuu rating:</strong> ${escapeHtml(average.toFixed(1))}/10 from ${own.length} ratings</p>`
+    : '';
+  const discussion = thread.length
+    ? thread.map((c) => `<article style="margin-top:14px">
+          <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.7"><strong>${escapeHtml(authors.get(c.user_id) || 'Anonymous')}</strong> · <time datetime="${escapeHtml(c.created_at)}">${escapeHtml(String(c.created_at).slice(0, 10))}</time></p>
+          <p ${P}>${escapeHtml(c.content)}</p>
+        </article>`).join('\n        ')
+    : `<p ${P}>No comments yet. Be the first to say what you thought of episode ${n}.</p>`;
+
+  const content = `
+    <main class="mx-auto max-w-3xl px-4 py-12">
+      <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:14px"><a href="${escapeHtml(animePath(row))}">${escapeHtml(title)}</a> · Episode ${n}${row.episodes ? ` of ${row.episodes}` : ''}</p>
+      <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,48px);line-height:1;margin-top:8px">${escapeHtml(title)} — Episode ${n}</h1>
+      ${airs}
+      ${score}
+      <section>
+        <h2 ${H2}>Discussion</h2>
+        ${discussion}
+      </section>
+      <nav style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:28px;display:flex;gap:24px">
+        ${neighbour(n - 1, `← Episode ${n - 1}`)}
+        ${neighbour(n + 1, `Episode ${n + 1} →`)}
+      </nav>
+    </main>`;
+
+  return injectBody(
+    injectHead(SHELL, {
+      title: episodeTitleTag(row, n),
+      description: episodeDescription(row, n, stats, { timeZone: 'UTC' }),
+      canonical: url,
+      image: row.cover_image || null,
+      ld,
+      robots: indexable ? null : 'noindex, follow',
+    }),
+    content
+  );
+}
+
 /** A well-formed id with no row behind it is a genuine 404, not a soft one. */
 function renderMissing() {
   return injectHead(
@@ -661,8 +798,41 @@ export default async function handler(req, res) {
 
       const row = rows[0];
       const relationIds = (Array.isArray(row.relations) ? row.relations : []).map((r) => r.id);
-      const [related, known] = await Promise.all([loadRelated(row), rowsById(relationIds)]);
-      return send(res, 200, renderAnime(row, community, related, known));
+      const [related, known, activity] = await Promise.all([
+        loadRelated(row),
+        rowsById(relationIds),
+        lastEpisode(row) ? loadEpisodeActivity(row.id) : new Map(),
+      ]);
+      return send(res, 200, renderAnime(row, community, related, known, activity));
+    }
+
+    if (route === 'episode') {
+      const id = url.searchParams.get('id') || '';
+      const ep = url.searchParams.get('ep') || '';
+      if (!/^anilist-\d+$/.test(id) || !/^\d+$/.test(ep)) return send(res, 404, renderMissing());
+      const n = Number(ep);
+      const key = encodeURIComponent(id);
+      const [rows, ratings, comments, thread] = await Promise.all([
+        sb(`anime_index?id=eq.${key}&select=*&limit=1`),
+        sb(`episode_ratings?anime_id=eq.${key}&select=episode_number,rating`),
+        sb(`episode_comments?anime_id=eq.${key}&select=episode_number`),
+        sb(`episode_comments?anime_id=eq.${key}&episode_number=eq.${n}&select=id,user_id,content,created_at&order=created_at.desc&limit=${THREAD_SIZE}`),
+      ]);
+      if (rows === null) return send(res, 200, SHELL);
+      const row = Array.isArray(rows) ? rows[0] : null;
+      const last = row ? lastEpisode(row) : null;
+      if (!row || !last || n < 1 || n > last) return send(res, 404, renderMissing());
+
+      const posts = Array.isArray(thread) ? thread : [];
+      const userIds = [...new Set(posts.map((c) => c.user_id))];
+      const users = userIds.length ? await sb(`users?id=in.(${userIds.map(encodeURIComponent).join(',')})&select=id,username`) : [];
+      const authors = new Map((Array.isArray(users) ? users : []).map((u) => [u.id, u.username]));
+      return send(res, 200, renderEpisode(row, n, {
+        ratings: Array.isArray(ratings) ? ratings : [],
+        comments: Array.isArray(comments) ? comments : [],
+        thread: posts,
+        authors,
+      }));
     }
 
     const variant = isVariant(url);

@@ -86,6 +86,7 @@ test('the index lists the static sitemap and one anime sitemap per URLS_PER_SITE
   assert.equal(index.statusCode, 200);
   assert.deepEqual(locs(index.body), [
     'https://www.rebyuu.app/sitemap-static.xml',
+    'https://www.rebyuu.app/sitemap-episodes.xml',
     'https://www.rebyuu.app/sitemap-anime-1.xml',
     'https://www.rebyuu.app/sitemap-anime-2.xml',
   ]);
@@ -112,4 +113,49 @@ test('a database outage is a 503, never an empty sitemap', async () => {
 
   assert.equal((await get('kind=index')).statusCode, 503);
   assert.equal((await get('kind=anime&page=1')).statusCode, 503);
+});
+
+// ── episodes ──────────────────────────────────────────────────────────
+
+const episodeLocs = (xml) => locs(xml).map((l) => l.replace('https://www.rebyuu.app', ''));
+
+const epTables = (extra = {}) => ({
+  anime_index: [
+    row(1, { episodes: 12, status: 'completed' }),
+    row(2, { episodes: 12, status: 'airing', next_episode: 5, next_episode_at: '2099-01-01T00:00:00+00:00' }),
+    row(3, { episodes: 1, status: 'completed' }),
+  ],
+  episode_comments: [
+    { anime_id: 'anilist-1', episode_number: 3 },
+    { anime_id: 'anilist-1', episode_number: 40 },
+    { anime_id: 'anilist-3', episode_number: 1 },
+  ],
+  episode_ratings: [
+    ...[1, 2, 3].map(() => ({ anime_id: 'anilist-1', episode_number: 7 })),
+    ...[1, 2].map(() => ({ anime_id: 'anilist-1', episode_number: 8 })),
+  ],
+  ...extra,
+});
+
+test('the episode sitemap lists discussed or rated episodes, and airing shows\' latest and next', async () => {
+  installFetch({ tables: epTables() });
+
+  const res = await get('kind=episodes');
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(episodeLocs(res.body).sort(), [
+    '/anime/anilist-1/episode/3',
+    '/anime/anilist-1/episode/7',
+    '/anime/anilist-2/episode/4',
+    '/anime/anilist-2/episode/5',
+  ]);
+});
+
+test('before the migration, the episode sitemap still lists discussed episodes', async () => {
+  installFetch({ tables: epTables(), missingColumns: ['next_episode', 'next_episode_at'] });
+
+  const res = await get('kind=episodes');
+
+  assert.equal(res.statusCode, 200);
+  assert.deepEqual(episodeLocs(res.body).sort(), ['/anime/anilist-1/episode/3', '/anime/anilist-1/episode/7']);
 });

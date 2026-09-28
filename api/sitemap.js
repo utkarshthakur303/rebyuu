@@ -1,4 +1,5 @@
 import { animePath } from './_paths.js';
+import { episodePath, episodeActivity, indexableEpisodes } from './_episodes.js';
 
 /**
  * XML sitemaps for title pages, generated from anime_index on request.
@@ -11,6 +12,7 @@ import { animePath } from './_paths.js';
  *
  *   /sitemap-index.xml     -> ?kind=index      the static sitemap + every anime page
  *   /sitemap-anime-N.xml   -> ?kind=anime&page=N
+ *   /sitemap-episodes.xml  -> ?kind=episodes   indexable episode pages (_episodes.js)
  *
  * lastmod comes from anime_index.updated_at. That is only meaningful because
  * the sync writes a row only when something in it changed; before that, every
@@ -85,21 +87,69 @@ async function titlesOnPage(page) {
   return (await Promise.all(chunks)).flatMap((c) => c.rows);
 }
 
+/** Every row of a query, a page of ROWS_PER_REQUEST at a time. */
+async function allRows(path) {
+  const rows = [];
+  for (let from = 0; ; from += ROWS_PER_REQUEST) {
+    const page = await query(path, { from, to: from + ROWS_PER_REQUEST - 1 });
+    rows.push(...page.rows);
+    if (page.rows.length < ROWS_PER_REQUEST) return rows;
+  }
+}
+
+/**
+ * The indexable episode pages: those with comments or enough ratings, plus
+ * each airing show's latest and next episode. The airing half needs the
+ * next-episode columns; before their migration runs that query fails, and
+ * the sitemap lists the discussed episodes alone.
+ */
+async function episodePaths() {
+  const [comments, ratings] = await Promise.all([
+    allRows('episode_comments?select=anime_id,episode_number&order=id.asc'),
+    allRows('episode_ratings?select=anime_id,episode_number&order=id.asc'),
+  ]);
+  const airing = await allRows('anime_index?select=*&status=eq.airing&next_episode=not.is.null&order=id.asc').catch(() => []);
+
+  const byTitle = new Map();
+  const add = (row, key) => {
+    if (!byTitle.has(row.anime_id)) byTitle.set(row.anime_id, { comments: [], ratings: [] });
+    byTitle.get(row.anime_id)[key].push(row);
+  };
+  comments.forEach((c) => add(c, 'comments'));
+  ratings.forEach((r) => add(r, 'ratings'));
+
+  const rows = new Map(airing.map((row) => [row.id, row]));
+  const missing = [...byTitle.keys()].filter((id) => !rows.has(id));
+  for (let i = 0; i < missing.length; i += 200) {
+    const chunk = missing.slice(i, i + 200).map(encodeURIComponent).join(',');
+    for (const row of (await query(`anime_index?select=*&id=in.(${chunk})`)).rows) rows.set(row.id, row);
+  }
+
+  const paths = [];
+  for (const row of rows.values()) {
+    const activity = byTitle.get(row.id);
+    for (const n of indexableEpisodes(row, episodeActivity(activity?.comments, activity?.ratings))) {
+      paths.push(episodePath(row, n));
+    }
+  }
+  return paths;
+}
+
 const xmlEscape = (s) =>
   String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
 
 const day = (timestamp) => (/^\d{4}-\d{2}-\d{2}/.test(timestamp || '') ? timestamp.slice(0, 10) : null);
 
-function urlset(rows) {
-  const urls = rows.map((row) => {
-    const lastmod = day(row.updated_at);
-    return `  <url>\n    <loc>${xmlEscape(ORIGIN + animePath(row))}</loc>${lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : ''}\n  </url>`;
-  });
+/** entries: [{ path, lastmod? }] */
+function urlset(entries) {
+  const urls = entries.map(({ path, lastmod }) =>
+    `  <url>\n    <loc>${xmlEscape(ORIGIN + path)}</loc>${lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : ''}\n  </url>`
+  );
   return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls.join('\n')}\n</urlset>\n`;
 }
 
 function sitemapIndex(pages) {
-  const entries = ['sitemap-static.xml', ...Array.from({ length: pages }, (_, i) => `sitemap-anime-${i + 1}.xml`)];
+  const entries = ['sitemap-static.xml', 'sitemap-episodes.xml', ...Array.from({ length: pages }, (_, i) => `sitemap-anime-${i + 1}.xml`)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries
     .map((file) => `  <sitemap>\n    <loc>${ORIGIN}/${file}</loc>\n  </sitemap>`)
     .join('\n')}\n</sitemapindex>\n`;
@@ -125,7 +175,13 @@ export default async function handler(req, res) {
       const page = Number(url.searchParams.get('page'));
       if (!Number.isInteger(page) || page < 1) return send(res, 404, '');
       const rows = await titlesOnPage(page);
-      return rows.length ? send(res, 200, urlset(rows)) : send(res, 404, '');
+      return rows.length
+        ? send(res, 200, urlset(rows.map((row) => ({ path: animePath(row), lastmod: day(row.updated_at) }))))
+        : send(res, 404, '');
+    }
+    if (kind === 'episodes') {
+      // An empty list is a valid answer here: no episode has earned a page yet.
+      return send(res, 200, urlset((await episodePaths()).map((path) => ({ path }))));
     }
     return send(res, 404, '');
   } catch {

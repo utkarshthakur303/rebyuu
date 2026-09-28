@@ -153,7 +153,8 @@ function postgrest(tables, url, missingColumns) {
     else rows = applyFilter(rows, key, value);
   }
   const columns = select && select !== '*' ? splitTop(select) : null;
-  const missing = (columns || []).filter((c) => missingColumns.has(c));
+  const filtered = [...url.searchParams.keys()].filter((k) => !['select', 'order', 'limit', 'or', 'and'].includes(k));
+  const missing = [...(columns || []), ...filtered].filter((c) => missingColumns.has(c));
   if (missing.length) {
     const err = new Error(`column anime_index.${missing[0]} does not exist`);
     err.status = 400;
