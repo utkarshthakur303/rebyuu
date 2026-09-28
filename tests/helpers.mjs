@@ -70,16 +70,28 @@ function applyFilter(rows, column, expr) {
   });
 }
 
-function applyOrder(rows, spec) {
-  const [column, dir = 'asc', nulls] = spec.split('.');
+function compareBy(term) {
+  const [column, dir = 'asc', nulls] = term.split('.');
   const nullsLast = nulls === 'nullslast' || (nulls !== 'nullsfirst' && dir === 'asc');
-  return [...rows].sort((a, b) => {
+  return (a, b) => {
     const x = a[column];
     const y = b[column];
     if (x == null && y == null) return 0;
     if (x == null) return nullsLast ? 1 : -1;
     if (y == null) return nullsLast ? -1 : 1;
     return dir === 'desc' ? (y > x ? 1 : y < x ? -1 : 0) : (x > y ? 1 : x < y ? -1 : 0);
+  };
+}
+
+/** "rating.desc.nullslast,id.asc" — terms applied left to right. */
+function applyOrder(rows, spec) {
+  const comparators = spec.split(',').map(compareBy);
+  return [...rows].sort((a, b) => {
+    for (const cmp of comparators) {
+      const r = cmp(a, b);
+      if (r) return r;
+    }
+    return 0;
   });
 }
 

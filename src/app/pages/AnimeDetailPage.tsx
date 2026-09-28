@@ -2,7 +2,8 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getAnimeById, getAnimeReviews, getCommunityScore, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { AnimeCard } from '@/app/components/AnimeCard';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/services/supabase';
 import { EpisodeModal } from '@/app/components/EpisodeModal';
@@ -24,6 +25,7 @@ export default function AnimeDetailPage() {
   const animeRef = useRef<Anime | null>(null);
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityScore | null>(null);
+  const [related, setRelated] = useState<Anime[]>([]);
   const displayTitle = useAnimeTitle(anime);
 
   /**
@@ -41,6 +43,14 @@ export default function AnimeDetailPage() {
     getCommunityScore(id).then(score => { if (!cancelled) setCommunity(score); });
     return () => { cancelled = true; };
   }, [id, reviews.length]);
+
+  useEffect(() => {
+    setRelated([]);
+    if (!anime) return;
+    let cancelled = false;
+    getRelatedAnime(anime).then(rows => { if (!cancelled) setRelated(rows); });
+    return () => { cancelled = true; };
+  }, [anime]);
 
   const loadAnime = useCallback(async (animeId: string) => {
     if (!animeId) return;
@@ -631,6 +641,22 @@ export default function AnimeDetailPage() {
               )}
             </div>
           </motion.section>
+
+          {related.length > 0 && (
+            <motion.section
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ duration: 0.5 }}
+            >
+              <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>More like this</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 sm:gap-4">
+                {related.map((item, index) => (
+                  <AnimeCard key={item.id} anime={item} index={index} />
+                ))}
+              </div>
+            </motion.section>
+          )}
         </div>
       </div>
 

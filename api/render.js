@@ -1,4 +1,5 @@
 import { SHELL } from './_shell.js';
+import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 
 /**
  * Server-rendered metadata and content for the two routes that matter to
@@ -158,6 +159,28 @@ async function loadHomeRails() {
   );
 }
 
+/**
+ * "More like this" for a title page — see _related.js. Pools are fetched one
+ * at a time because the any-year pool is only needed when the era pool comes
+ * up short, which for most titles it does not.
+ */
+async function loadRelated(row) {
+  const fetched = [];
+  let picked = [];
+  for (const pool of relatedPools(row)) {
+    const genres = `{${pool.genres.map((g) => `"${g.replace(/"/g, '')}"`).join(',')}}`;
+    const years = pool.yearFrom ? `&year=gte.${pool.yearFrom}&year=lte.${pool.yearTo}` : '';
+    const rows = await sb(
+      `anime_index?select=id,title,year,rating,genres,cover_image&id=neq.${encodeURIComponent(row.id)}` +
+      `&genres=ov.${encodeURIComponent(genres)}${years}&order=rating.desc.nullslast,id.asc&limit=${RELATED_POOL_SIZE}`
+    );
+    fetched.push(Array.isArray(rows) ? rows : []);
+    picked = rankRelated(row, fetched);
+    if (picked.length === RELATED_SIZE) break;
+  }
+  return picked;
+}
+
 /** A heading plus a plain ordered list of title links. Empty rails render nothing. */
 function renderTitleList({ heading, subtitle, items }) {
   if (!items.length) return '';
@@ -286,7 +309,7 @@ function renderHome(rails = []) {
   return injectBody(html, content);
 }
 
-function renderAnime(row, community) {
+function renderAnime(row, community, related = []) {
   const title = String(row.title || 'Untitled');
   const synopsis = stripTags(row.description);
   const year = row.year ? String(row.year) : null;
@@ -404,6 +427,7 @@ function renderAnime(row, community) {
       ${synopsis ? `<h2 style="font-family:Anton,Impact,sans-serif;font-size:22px;margin-top:24px">Synopsis</h2>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7">${escapeHtml(synopsis)}</p>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.7;margin-top:10px">Synopsis and artwork via <a href="https://anilist.co">AniList</a>. Score via MyAnimeList. See <a href="/about">About</a> for full sourcing.</p>` : ''}
+      ${renderTitleList({ heading: 'More like this', items: related })}
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:20px"><a href="/browse">Browse more anime</a></p>
     </main>`;
 
@@ -460,7 +484,7 @@ export default async function handler(req, res) {
         community = { average: Math.round((total / ratings.length) * 10) / 10, count: ratings.length };
       }
 
-      return send(res, 200, renderAnime(rows[0], community));
+      return send(res, 200, renderAnime(rows[0], community, await loadRelated(rows[0])));
     }
 
     return send(res, 200, renderHome(await loadHomeRails()));

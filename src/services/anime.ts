@@ -9,6 +9,7 @@ import {
   type AniListStatus,
   type RankedEntry,
 } from './anilist';
+import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from '../../api/_related.js';
 
 export interface Anime {
   id: string;
@@ -100,6 +101,33 @@ export async function getAnimeById(id: string): Promise<Anime | null> {
 
   const media = await fetchMediaById(anilistId);
   return media ? mediaToAnime(media) : null;
+}
+
+/**
+ * "More like this" for a title page. The pools and the ranking live in
+ * api/_related.js and are shared with the prerender, so these cards are the
+ * same titles, in the same order, that the served HTML already linked to.
+ */
+export async function getRelatedAnime(anime: Anime): Promise<Anime[]> {
+  const fetched: Anime[][] = [];
+  let picked: Anime[] = [];
+  for (const pool of relatedPools(anime)) {
+    let q = supabase
+      .from('anime_index')
+      .select('*')
+      .neq('id', anime.id)
+      .overlaps('genres', pool.genres);
+    if (pool.yearFrom) q = q.gte('year', pool.yearFrom).lte('year', pool.yearTo);
+    const { data, error } = await q
+      .order('rating', { ascending: false, nullsFirst: false })
+      .order('id', { ascending: true })
+      .limit(RELATED_POOL_SIZE);
+    if (error) console.error('Error fetching related anime:', error);
+    fetched.push((data as Anime[]) || []);
+    picked = rankRelated(anime, fetched);
+    if (picked.length === RELATED_SIZE) break;
+  }
+  return picked;
 }
 
 /**
