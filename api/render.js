@@ -1,6 +1,7 @@
 import { SHELL } from './_shell.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
+import { animePath } from './_paths.js';
 
 /**
  * Server-rendered metadata and content for the two routes that matter to
@@ -230,7 +231,7 @@ function renderTitleList({ heading, subtitle, items }) {
   if (!items.length) return '';
   const lis = items
     .map((row) =>
-      `<li><a href="/anime/${escapeHtml(row.id)}">${escapeHtml(row.title || 'Untitled')}</a>${row.year ? ` <span style="opacity:.6">(${escapeHtml(String(row.year))})</span>` : ''}</li>`
+      `<li><a href="${escapeHtml(animePath(row))}">${escapeHtml(row.title || 'Untitled')}</a>${row.year ? ` <span style="opacity:.6">(${escapeHtml(String(row.year))})</span>` : ''}</li>`
     )
     .join('\n          ');
   return `
@@ -355,6 +356,7 @@ function renderHome(rails = []) {
 
 function renderAnime(row, community, related = []) {
   const title = String(row.title || 'Untitled');
+  const pageUrl = `${ORIGIN}${animePath(row)}`;
   const synopsis = stripTags(row.description);
   const year = row.year ? String(row.year) : null;
   const genres = Array.isArray(row.genres) ? row.genres.filter(Boolean) : [];
@@ -399,8 +401,8 @@ function renderAnime(row, community, related = []) {
 
   const work = {
     '@type': type,
-    '@id': `${ORIGIN}/anime/${row.id}#work`,
-    url: `${ORIGIN}/anime/${row.id}`,
+    '@id': `${pageUrl}#work`,
+    url: pageUrl,
     name: title,
     inLanguage: 'en',
   };
@@ -433,11 +435,11 @@ function renderAnime(row, community, related = []) {
       work,
       {
         '@type': 'BreadcrumbList',
-        '@id': `${ORIGIN}/anime/${row.id}#breadcrumb`,
+        '@id': `${pageUrl}#breadcrumb`,
         itemListElement: [
           { '@type': 'ListItem', position: 1, name: 'Rebyuu', item: `${ORIGIN}/` },
           { '@type': 'ListItem', position: 2, name: 'Browse', item: `${ORIGIN}/browse` },
-          { '@type': 'ListItem', position: 3, name: title, item: `${ORIGIN}/anime/${row.id}` },
+          { '@type': 'ListItem', position: 3, name: title, item: pageUrl },
         ],
       },
     ],
@@ -478,7 +480,7 @@ function renderAnime(row, community, related = []) {
   let html = injectHead(SHELL, {
     title: pageTitle,
     description,
-    canonical: `${ORIGIN}/anime/${row.id}`,
+    canonical: pageUrl,
     image: row.cover_image || image,
     ld,
   });

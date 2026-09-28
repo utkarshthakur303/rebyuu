@@ -45,6 +45,25 @@ export function changedIds(existing, incoming) {
 }
 
 /**
+ * What the sync should write for one page of titles.
+ *
+ * Only new or changed rows are written, each stamped with `now` as its
+ * updated_at. The table's trigger bumps updated_at on every UPDATE, and the
+ * sitemap publishes it as lastmod — so rewriting unchanged rows, as the sync
+ * used to, told search engines that ~800 pages changed every night when a few
+ * dozen had. `existing` is null when the stored rows could not be read: then
+ * everything is written (the catalogue must still update) and nothing is
+ * reported as changed.
+ */
+export function planWrite(existing, incoming, { now = new Date() } = {}) {
+  if (!existing) return { write: incoming, changed: [] };
+  const changed = changedIds(existing, incoming);
+  const stamp = now.toISOString();
+  const write = incoming.filter((row) => changed.includes(row.id)).map((row) => ({ ...row, updated_at: stamp }));
+  return { write, changed };
+}
+
+/**
  * Submits the title pages for `ids`. Never throws: a failed ping must not
  * fail the sync that has already written the catalogue.
  */

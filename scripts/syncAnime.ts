@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
 import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
-import { changedIds, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
+import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
 const ANILIST_API = 'https://graphql.anilist.co';
 
 const ANILIST_QUERY = `
@@ -172,22 +172,25 @@ async function syncAnimeToSupabase(
     };
   });
 
-  // Read the rows as they stand before the upsert overwrites them, so the
-  // IndexNow submission can be limited to titles that really changed. If the
-  // read fails, report nothing rather than every row as changed.
+  // Read the rows as they stand, so only titles that really changed are
+  // written (keeping updated_at, and so the sitemap's lastmod, truthful) and
+  // submitted to IndexNow. See planWrite.
   const { data: existing, error: readError } = await supabase
     .from('anime_index')
     .select(['id', ...SYNCED_COLUMNS].join(','))
     .in('id', animeData.map((a) => a.id));
-  const changed = readError ? [] : changedIds(existing ?? [], animeData);
+  if (readError) console.error(`  could not read stored rows, writing all: ${readError.message}`);
+  const { write, changed } = planWrite(readError ? null : existing ?? [], animeData);
 
-  const { error } = await supabase.from('anime_index').upsert(animeData, {
-    onConflict: 'id',
-    ignoreDuplicates: false
-  });
+  if (write.length) {
+    const { error } = await supabase.from('anime_index').upsert(write, {
+      onConflict: 'id',
+      ignoreDuplicates: false
+    });
 
-  if (error) {
-    throw new Error(`Supabase upsert error: ${error.message}`);
+    if (error) {
+      throw new Error(`Supabase upsert error: ${error.message}`);
+    }
   }
 
   return changed;
@@ -272,8 +275,9 @@ async function syncAnime() {
   }
 
   const mins = ((Date.now() - started) / 60000).toFixed(1);
-  // Rows overlap between passes, so this counts upserts, not distinct titles.
-  console.log(`\nSync complete in ${mins} min. Rows upserted: ${total}. Titles changed: ${changed.size}`);
+  // Rows overlap between passes, so "checked" counts rows fetched, not
+  // distinct titles. Only the changed ones were written.
+  console.log(`\nSync complete in ${mins} min. Rows checked: ${total}. Titles changed and written: ${changed.size}`);
 
   await submitToIndexNow([...changed]);
 }

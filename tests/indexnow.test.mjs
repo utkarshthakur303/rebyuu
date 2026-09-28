@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { changedIds, submitToIndexNow, INDEXNOW_KEY } from '../scripts/indexNow.mjs';
+import { changedIds, planWrite, submitToIndexNow, INDEXNOW_KEY } from '../scripts/indexNow.mjs';
 import { anime } from './helpers.mjs';
 
 const stored = anime(1, 'Show', { rating: 8.5, genres: ['Action', 'Drama'], year: 2024, status: 'airing', episodes: 12 });
@@ -27,6 +27,29 @@ test('a numeric rating read back as a string is not a change', () => {
 
 test('columns the sync does not write are ignored', () => {
   assert.deepEqual(changedIds([{ ...stored, updated_at: 'yesterday' }], [stored]), []);
+});
+
+test('only new or changed rows are written, stamped with when they changed', () => {
+  // Every UPDATE bumps updated_at, which the sitemap publishes as lastmod —
+  // so rewriting an unchanged row would claim a change that never happened.
+  const now = new Date('2026-09-28T03:20:00Z');
+  const incoming = [{ ...stored }, { ...stored, id: 'anilist-2', rating: 9 }, anime(3, 'New')];
+  const existing = [stored, { ...stored, id: 'anilist-2', rating: 8 }];
+
+  const { write, changed } = planWrite(existing, incoming, { now });
+
+  assert.deepEqual(changed, ['anilist-2', 'anilist-3']);
+  assert.deepEqual(write.map((r) => r.id), ['anilist-2', 'anilist-3']);
+  assert.ok(write.every((r) => r.updated_at === now.toISOString()));
+});
+
+test('when the stored rows could not be read, every row is written and none reported', () => {
+  const incoming = [stored, anime(3, 'New')];
+
+  const { write, changed } = planWrite(null, incoming);
+
+  assert.deepEqual(write, incoming);
+  assert.deepEqual(changed, []);
 });
 
 test('the key file served from public/ holds the key being submitted', () => {
