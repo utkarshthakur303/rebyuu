@@ -2,6 +2,7 @@ import { SHELL } from './_shell.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath } from './_paths.js';
+import { titleTag, metaDescription } from './_titlepage.js';
 
 /**
  * Server-rendered metadata and content for the two routes that matter to
@@ -336,7 +337,7 @@ function renderHome(rails = []) {
       <h1 class="uppercase" style="font-family:Anton,Impact,sans-serif;font-size:clamp(34px,7vw,60px);line-height:0.95">Rebyuu</h1>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:18px;line-height:1.7;margin-top:16px">${escapeHtml(description)}</p>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7;margin-top:14px">
-        Catalogue data, including synopses, genre tags and artwork, comes from AniList; the numeric score shown on each title page is MyAnimeList's community aggregate, read via the Jikan API. Rebyuu's own community score is calculated from ratings left by Rebyuu accounts.
+        Catalogue data, including synopses, genre tags and artwork, comes from AniList; the numeric score shown on each title page is the average score of AniList users. Rebyuu's own community score is calculated from ratings left by Rebyuu accounts.
       </p>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:18px">
         <a href="/browse">Browse the catalogue</a> · <a href="/about">About Rebyuu and its sources</a>
@@ -367,16 +368,9 @@ function renderAnime(row, community, related = []) {
     : row.status === 'upcoming' ? 'Upcoming'
     : 'Completed';
 
-  const descBits = [
-    year ? `${year}` : null,
-    row.episodes ? `${row.episodes} episode${row.episodes === 1 ? '' : 's'}` : null,
-    genres.length ? genres.slice(0, 3).join(', ') : null,
-  ].filter(Boolean).join(' · ');
-
-  const pageTitle = `${title}${year ? ` (${year})` : ''} — synopsis, score and episodes · Rebyuu`;
-  const description = synopsis
-    ? truncate(synopsis, 155)
-    : `${title}. ${descBits}. ${statusWord}. Details, score and episode list on Rebyuu.`;
+  const published = community && community.count >= MIN_RATINGS_FOR_SCORE ? community : null;
+  const pageTitle = titleTag(row);
+  const description = metaDescription(row, { community: published });
 
   /**
    * anime_index has no `format` column, so a series and a film are not
@@ -413,8 +407,8 @@ function renderAnime(row, community, related = []) {
   if (year) work.startDate = year;
 
   /**
-   * Only Rebyuu's own ratings are ever marked up. The MAL score displayed on
-   * the page is another platform's aggregate of its own users and carries no
+   * Only Rebyuu's own ratings are ever marked up. The AniList score displayed
+   * on the page is another platform's aggregate of its own users and carries no
    * vote count we hold, so publishing it as this page's aggregateRating would
    * be both unverifiable and exactly what review-snippet spam guidance
    * targets. Below the threshold nothing is emitted at all.
@@ -459,7 +453,7 @@ function renderAnime(row, community, related = []) {
       <div><dt style="display:inline;font-weight:600">Status: </dt><dd style="display:inline;margin:0">${escapeHtml(statusWord)}</dd></div>
       ${row.episodes ? `<div><dt style="display:inline;font-weight:600">Episodes: </dt><dd style="display:inline;margin:0">${escapeHtml(String(row.episodes))}</dd></div>` : ''}
       ${genres.length ? `<div><dt style="display:inline;font-weight:600">Genres: </dt><dd style="display:inline;margin:0">${escapeHtml(genres.join(', '))}</dd></div>` : ''}
-      ${row.rating ? `<div><dt style="display:inline;font-weight:600">MyAnimeList score: </dt><dd style="display:inline;margin:0">${escapeHtml(String(row.rating))}/10</dd></div>` : ''}
+      ${row.rating != null ? `<div><dt style="display:inline;font-weight:600">AniList score: </dt><dd style="display:inline;margin:0">${escapeHtml(Number(row.rating).toFixed(1))}/10</dd></div>` : ''}
       ${community && community.count >= MIN_RATINGS_FOR_SCORE
         ? `<div><dt style="display:inline;font-weight:600">Rebyuu community score: </dt><dd style="display:inline;margin:0">${escapeHtml(String(community.average))}/10 from ${escapeHtml(String(community.count))} ratings</dd></div>`
         : ''}
@@ -472,7 +466,7 @@ function renderAnime(row, community, related = []) {
       ${factsHtml}
       ${synopsis ? `<h2 style="font-family:Anton,Impact,sans-serif;font-size:22px;margin-top:24px">Synopsis</h2>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7">${escapeHtml(synopsis)}</p>
-      <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.7;margin-top:10px">Synopsis and artwork via <a href="https://anilist.co">AniList</a>. Score via MyAnimeList. See <a href="/about">About</a> for full sourcing.</p>` : ''}
+      <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.7;margin-top:10px">Synopsis, artwork and score via <a href="https://anilist.co">AniList</a>. See <a href="/about">About</a> for full sourcing.</p>` : ''}
       ${renderTitleList({ heading: 'More like this', items: related })}
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:20px"><a href="/browse">Browse more anime</a></p>
     </main>`;

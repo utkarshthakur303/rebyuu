@@ -53,6 +53,24 @@ test('a title with no genres renders no "More like this" section', async () => {
   assert.doesNotMatch(rootOf(res.body), /More like this/);
 });
 
+test('a title page is served with the data-built title tag and description', async () => {
+  installFetch({ tables: { anime_index: [target], ratings: [] } });
+
+  const { body } = await render(handler, 'route=anime&id=anilist-1');
+
+  assert.match(body, /<title>Target Show \(2020\) — Reviews &amp; Ratings · Rebyuu<\/title>/);
+  assert.match(body, /<meta name="description" content="Target Show is a 2020 action and fantasy anime series with 12 episodes\. Rated 8.0\/10 by AniList users\." \/>/);
+});
+
+test('the stored score is labelled as AniList\'s, which is where the sync reads it from', async () => {
+  installFetch({ tables: { anime_index: [target], ratings: [] } });
+
+  const root = rootOf((await render(handler, 'route=anime&id=anilist-1')).body);
+
+  assert.match(root, /AniList score: <\/dt><dd[^>]*>8.0\/10/);
+  assert.doesNotMatch(root, /MyAnimeList score/);
+});
+
 test('an unknown title id is still a real 404', async () => {
   installFetch({ tables: { anime_index: [target], ratings: [] } });
 

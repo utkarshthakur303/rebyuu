@@ -11,6 +11,9 @@ import ListPickerModal from '@/app/components/ListPickerModal';
 import { toast } from 'sonner';
 import { useNoIndex } from '@/utils/useNoIndex';
 import { useAnimeTitle } from '@/context/TitleLangContext';
+import { useSeo } from '@/utils/useSeo';
+import { titleTag, metaDescription } from '../../../api/_titlepage.js';
+import { animePath } from '../../../api/_paths.js';
 
 export default function AnimeDetailPage() {
   const { id } = useParams();
@@ -34,6 +37,14 @@ export default function AnimeDetailPage() {
    * this fetch can. Mark those noindex so they do not accumulate as soft 404s.
    */
   useNoIndex(!loading && !anime);
+
+  /* The same title and description the prerender serves, so a visit that
+     arrives by client-side navigation gets them too. */
+  useSeo(
+    anime
+      ? { title: titleTag(anime), description: metaDescription(anime, { community }), path: animePath(anime) }
+      : { title: '' }
+  );
 
   /* Refetched whenever the reviews list changes, since posting a review also
      writes a rating — the displayed score would otherwise lag by a page load. */
@@ -314,11 +325,11 @@ export default function AnimeDetailPage() {
 
             <div className="mb-3 sm:mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Two scores, and it must be obvious which is which. The starred
-                  number is MyAnimeList's aggregate of MyAnimeList users — it was
-                  previously unlabelled, which read as though it were Rebyuu's own
-                  verdict on the title. The second is genuinely ours, appears only
-                  once enough people have rated to mean anything, and states the
-                  count so the reader can weigh it. */}
+                  number is AniList's average of its own users' scores — the sync
+                  stores AniList's averageScore; it was once labelled MAL, which it
+                  never was. The second is genuinely ours, appears only once enough
+                  people have rated to mean anything, and states the count so the
+                  reader can weigh it. */}
               {anime?.rating && (
                 <div className="flex items-center gap-2">
                   <Star className="h-5 w-5 star-gold" />
@@ -327,9 +338,9 @@ export default function AnimeDetailPage() {
                   <span
                     className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60"
                     style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
-                    title="Community score from MyAnimeList users, via the Jikan API"
+                    title="Average score from AniList users"
                   >
-                    MAL
+                    AniList
                   </span>
                 </div>
               )}

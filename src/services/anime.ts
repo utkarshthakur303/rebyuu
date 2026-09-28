@@ -135,8 +135,8 @@ export async function getRelatedAnime(anime: Anime): Promise<Anime[]> {
  * Rebyuu accounts, plus how many it is based on.
  *
  * This is the only rating on a title page that is genuinely first-party. The
- * number shown next to it elsewhere is MyAnimeList's aggregate of MyAnimeList
- * users, which is why that one is never marked up as this page's
+ * number shown next to it is AniList's average of AniList users' scores,
+ * which is why that one is never marked up as this page's
  * aggregateRating — presenting another platform's verdict as your own is what
  * review-snippet spam guidance exists to stop. This one can be, because it is
  * ours and because the count is real.
