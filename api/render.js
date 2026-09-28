@@ -32,8 +32,36 @@ const ORIGIN = 'https://www.rebyuu.app';
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
 const SUPABASE_KEY = process.env.VITE_SUPABASE_KEY;
 
+const ANILIST_API = 'https://graphql.anilist.co';
+
 /** Minimum first-party ratings before a community score is real enough to publish. */
 const MIN_RATINGS_FOR_SCORE = 3;
+
+/** Titles per homepage rail. Mirrors SECTION_SIZE in LandingPage.tsx. */
+const RAIL_SIZE = 8;
+
+/**
+ * The homepage's four rails, defined exactly as LandingPage builds them in
+ * services/anime.ts: the same AniList sort, status filter and over-fetch,
+ * hydrated from anime_index in ranking order, and the same archive query when
+ * the live ranking yields nothing. Keeping them identical is the point — the
+ * served HTML lists the titles a visitor then sees as cards, so the links a
+ * crawler follows from "/" are the page's real content, not a crawler-only
+ * index.
+ *
+ * Before this, the served homepage linked to /browse and /about and nothing
+ * else, and /browse is client-rendered, so none of the ~6,000 title pages in
+ * the sitemap had a single crawlable internal link pointing at it.
+ */
+const HOME_RAILS = [
+  { key: 'trending', heading: 'Trending', subtitle: 'Trending on AniList right now', sort: 'TRENDING_DESC', perPage: 24, fallback: 'order=rating.desc.nullslast' },
+  { key: 'favourites', heading: 'Fan Favorites', subtitle: 'Beloved by the community', sort: 'FAVOURITES_DESC', perPage: 24, fallback: 'order=rating.desc.nullslast' },
+  { key: 'airing', heading: 'Airing Now', subtitle: 'Currently broadcasting', sort: 'TRENDING_DESC', status: 'RELEASING', perPage: 50, fallback: 'status=eq.airing&order=rating.desc.nullslast' },
+  { key: 'upcoming', heading: 'Upcoming', subtitle: 'Anticipated releases', sort: 'POPULARITY_DESC', status: 'NOT_YET_RELEASED', perPage: 50, fallback: 'status=eq.upcoming&order=year.asc' },
+];
+
+/** A slow AniList must not hold a crawler's request open; the archive fallback is fine. */
+const ANILIST_TIMEOUT_MS = 2500;
 
 const escapeHtml = (s) =>
   String(s ?? '')
@@ -77,6 +105,75 @@ async function sb(path) {
   } catch {
     return null;
   }
+}
+
+/** Resolves to the GraphQL `data` object, or null on any failure. */
+async function anilist(query) {
+  try {
+    const res = await fetch(ANILIST_API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ query }),
+      signal: AbortSignal.timeout(ANILIST_TIMEOUT_MS),
+    });
+    if (!res.ok) return null;
+    const json = await res.json();
+    return json.errors ? null : json.data ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * All four rails in one AniList request (one aliased Page per rail), then one
+ * anime_index read to turn the ranked ids into titles. Each rail keeps its
+ * ranking order and drops ids the snapshot does not have — linking those
+ * would send a crawler to a 404.
+ */
+async function loadHomeRails() {
+  const query = `query {\n${HOME_RAILS.map((r) =>
+    `  ${r.key}: Page(page: 1, perPage: ${r.perPage}) { media(type: ANIME, sort: [${r.sort}]${r.status ? `, status: ${r.status}` : ''}, isAdult: false) { id } }`
+  ).join('\n')}\n}`;
+
+  const ranked = await anilist(query);
+  const idsByRail = HOME_RAILS.map((r) =>
+    (ranked?.[r.key]?.media ?? []).map((m) => `anilist-${m.id}`)
+  );
+
+  const allIds = [...new Set(idsByRail.flat())];
+  const rows = allIds.length
+    ? await sb(`anime_index?id=in.(${allIds.join(',')})&select=id,title,year`)
+    : [];
+  const byId = new Map((Array.isArray(rows) ? rows : []).map((row) => [row.id, row]));
+
+  return Promise.all(
+    HOME_RAILS.map(async (rail, i) => {
+      let items = idsByRail[i].map((id) => byId.get(id)).filter(Boolean).slice(0, RAIL_SIZE);
+      if (!items.length) {
+        const fallback = await sb(`anime_index?select=id,title,year&${rail.fallback}&limit=${RAIL_SIZE}`);
+        items = Array.isArray(fallback) ? fallback : [];
+      }
+      return { ...rail, items };
+    })
+  );
+}
+
+/** A heading plus a plain ordered list of title links. Empty rails render nothing. */
+function renderTitleList({ heading, subtitle, items }) {
+  if (!items.length) return '';
+  const lis = items
+    .map((row) =>
+      `<li><a href="/anime/${escapeHtml(row.id)}">${escapeHtml(row.title || 'Untitled')}</a>${row.year ? ` <span style="opacity:.6">(${escapeHtml(String(row.year))})</span>` : ''}</li>`
+    )
+    .join('\n          ');
+  return `
+      <section style="margin-top:36px">
+        <h2 style="font-family:Anton,Impact,sans-serif;font-size:26px;line-height:1.1">${escapeHtml(heading)}</h2>
+        ${subtitle ? `<p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:12px;letter-spacing:.15em;text-transform:uppercase;opacity:.6;margin-top:4px">${escapeHtml(subtitle)}</p>` : ''}
+        <ol style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:10px;padding-left:1.4em">
+          ${lis}
+        </ol>
+      </section>`;
 }
 
 /** Replaces the shell's single shared title/description with this route's. */
@@ -131,7 +228,7 @@ function send(res, status, html) {
   res.status(status).send(html);
 }
 
-function renderHome() {
+function renderHome(rails = []) {
   const title = 'Rebyuu — Anime discovery, tracking and reviews';
   const description =
     'Browse roughly 22,000 anime by genre, season and status, with live trending and currently-airing rankings. Track what you have watched and rate what you finish. No account needed to browse.';
@@ -164,9 +261,8 @@ function renderHome() {
     ],
   };
 
-  // Deliberately compact. The homepage's live rails are genuinely dynamic and
-  // React owns them; what a non-JS crawler needs from this page is a plain
-  // statement of what the site is, which it previously had nowhere.
+  // A plain statement of what the site is, then the same four rails React
+  // renders as cards, as plain title links. React replaces all of it on mount.
   const content = `
     <main class="mx-auto max-w-3xl px-4 py-16">
       <h1 class="uppercase" style="font-family:Anton,Impact,sans-serif;font-size:clamp(34px,7vw,60px);line-height:0.95">Rebyuu</h1>
@@ -177,6 +273,7 @@ function renderHome() {
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:18px">
         <a href="/browse">Browse the catalogue</a> · <a href="/about">About Rebyuu and its sources</a>
       </p>
+      ${rails.map(renderTitleList).join('')}
     </main>`;
 
   let html = injectHead(SHELL, {
@@ -366,7 +463,7 @@ export default async function handler(req, res) {
       return send(res, 200, renderAnime(rows[0], community));
     }
 
-    return send(res, 200, renderHome());
+    return send(res, 200, renderHome(await loadHomeRails()));
   } catch {
     // Never let this function be the reason the site is down. The shell alone
     // is exactly what the site served before this existed.
