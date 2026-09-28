@@ -83,6 +83,22 @@ test('titles are HTML-escaped inside rail links', async () => {
   assert.doesNotMatch(root, /<Jerry>/);
 });
 
+test('a homepage URL carrying tracking parameters does not wait on AniList or Supabase', async () => {
+  // Every fbclid/gclid/utm variant is its own edge-cache key, so each one is a
+  // cache miss. They canonicalise to "/", so they get the page without rails.
+  const calls = installFetch({
+    tables: { anime_index: catalogue, ratings: [] },
+    anilist: { trending: page([1]), favourites: page([]), airing: page([]), upcoming: page([]) },
+  });
+
+  const res = await render(handler, 'route=home&fbclid=IwAR0abc&utm_source=facebook');
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls.length, 0);
+  assert.match(rootOf(res.body), /<h1[^>]*>Rebyuu<\/h1>/);
+  assert.match(res.body, /<link rel="canonical" href="https:\/\/www.rebyuu.app\/" \/>/);
+});
+
 test('with Supabase down the homepage still renders its heading and description', async () => {
   installFetch({ tables: null, anilist: null });
 

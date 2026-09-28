@@ -71,6 +71,17 @@ const PROSE_ROUTES = ['about', 'terms', 'privacy'];
 /** A slow AniList must not hold a crawler's request open; the archive fallback is fine. */
 const ANILIST_TIMEOUT_MS = 2500;
 
+/**
+ * True when the request carries query parameters the renderer does not read:
+ * fbclid, gclid, utm_*, or a /browse filter. The query string rides along on
+ * the rewrite and is part of the edge-cache key, so every such variant is a
+ * cache miss — and a click from a social post or an ad carries a unique id,
+ * so it always is one. Those variants canonicalise to the bare path, so they
+ * get the page's head and heading without the live title lists, rather than
+ * waiting on AniList for links no crawler should be collecting from them.
+ */
+const isVariant = (url) => [...url.searchParams.keys()].some((k) => k !== 'route' && k !== 'id');
+
 const escapeHtml = (s) =>
   String(s ?? '')
     .replace(/&/g, '&amp;')
@@ -573,10 +584,11 @@ export default async function handler(req, res) {
       return send(res, 200, renderAnime(rows[0], community, await loadRelated(rows[0])));
     }
 
-    if (route === 'browse') return send(res, 200, renderBrowse(await loadBrowseFirstPage()));
+    const variant = isVariant(url);
+    if (route === 'browse') return send(res, 200, renderBrowse(variant ? [] : await loadBrowseFirstPage()));
     if (PROSE_ROUTES.includes(route)) return send(res, 200, renderProse(PAGES[route]));
 
-    return send(res, 200, renderHome(await loadHomeRails()));
+    return send(res, 200, renderHome(variant ? [] : await loadHomeRails()));
   } catch {
     // Never let this function be the reason the site is down. The shell alone
     // is exactly what the site served before this existed.

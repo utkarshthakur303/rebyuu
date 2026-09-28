@@ -48,6 +48,20 @@ test('/browse links the first page of the default view: live trending, in order,
   assert.deepEqual(animeLinks(rootOf(res.body)), ['anilist-3', 'anilist-1']);
 });
 
+test('a filtered /browse URL gets its head and heading without waiting on the live list', async () => {
+  const calls = installFetch({
+    tables: { anime_index: [anime(1, 'One')], ratings: [] },
+    anilist: { browse: page([1]) },
+  });
+
+  const res = await render(handler, 'route=browse&genre=action&sort=score');
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(calls.length, 0);
+  assert.deepEqual(titleOf(res.body).map(unescape), [`<title>${PAGES.browse.title}</title>`]);
+  assert.equal(canonicalOf(res.body), 'https://www.rebyuu.app/browse');
+});
+
 test('/browse falls back to the archive ordered by stored rating when AniList is down', async () => {
   installFetch({
     tables: {
