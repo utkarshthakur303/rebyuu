@@ -2,7 +2,8 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, getKnownTitles, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { ExtraFacts, WhereToWatch, NextEpisode, QuickAnswers, RelatedSeasons } from '@/app/components/TitleDetails';
 import { AnimeCard } from '@/app/components/AnimeCard';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/services/supabase';
@@ -29,6 +30,7 @@ export default function AnimeDetailPage() {
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityScore | null>(null);
   const [related, setRelated] = useState<Anime[]>([]);
+  const [knownRelations, setKnownRelations] = useState<Map<string, { id: string; title: string; year: number | null }>>(new Map());
   const displayTitle = useAnimeTitle(anime);
   // With the JP switch on, the heading is already the romaji title.
   const aliases = anime ? otherNames(anime).filter((name: string) => name !== displayTitle) : [];
@@ -62,6 +64,7 @@ export default function AnimeDetailPage() {
     if (!anime) return;
     let cancelled = false;
     getRelatedAnime(anime).then(rows => { if (!cancelled) setRelated(rows); });
+    getKnownTitles((anime.relations ?? []).map(r => r.id)).then(known => { if (!cancelled) setKnownRelations(known); });
     return () => { cancelled = true; };
   }, [anime]);
 
@@ -399,6 +402,8 @@ export default function AnimeDetailPage() {
                   <span>{anime.episodes} Episodes</span>
                 </div>
               )}
+
+              {anime && <ExtraFacts anime={anime} />}
             </div>
 
             <div className="mb-4 sm:mb-5 flex flex-wrap gap-1.5">
@@ -446,6 +451,8 @@ export default function AnimeDetailPage() {
         </div>
 
         <div className="space-y-6 sm:space-y-8 mt-6 sm:mt-8">
+          {anime && <WhereToWatch anime={anime} />}
+          {anime && <NextEpisode anime={anime} />}
           {anime?.trailer && (
             <motion.section
               initial={{ opacity: 0, y: 20 }}
@@ -516,6 +523,9 @@ export default function AnimeDetailPage() {
               </div>
             </motion.section>
           )}
+
+          {anime && <QuickAnswers anime={anime} />}
+          {anime && <RelatedSeasons anime={anime} known={knownRelations} />}
 
           {/* Reviews */}
           <motion.section

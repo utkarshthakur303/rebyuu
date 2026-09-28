@@ -146,6 +146,20 @@ export async function getRelatedAnime(anime: Anime): Promise<Anime[]> {
 }
 
 /**
+ * Which of `ids` exist in the catalogue, with the title and year to link them
+ * by. A title page links a sequel or prequel only when it is here — otherwise
+ * the link would be a 404.
+ */
+export async function getKnownTitles(
+  ids: string[]
+): Promise<Map<string, { id: string; title: string; year: number | null }>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await supabase.from('anime_index').select('id,title,year').in('id', ids);
+  if (error) console.error('Error fetching related titles:', error);
+  return new Map((data || []).map((row) => [row.id, row]));
+}
+
+/**
  * Rebyuu's own community score for a title: the mean of ratings left by
  * Rebyuu accounts, plus how many it is based on.
  *

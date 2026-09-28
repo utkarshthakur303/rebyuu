@@ -2,7 +2,10 @@ import { SHELL } from './_shell.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath } from './_paths.js';
-import { titleTag, metaDescription, otherNames, nameLang } from './_titlepage.js';
+import {
+  titleTag, metaDescription, otherNames, nameLang,
+  titleFacts, nextEpisode, formatAiring, relationGroups, quickAnswers,
+} from './_titlepage.js';
 
 /**
  * Server-rendered metadata and content for the two routes that matter to
@@ -355,7 +358,7 @@ function renderHome(rails = []) {
   return injectBody(html, content);
 }
 
-function renderAnime(row, community, related = []) {
+function renderAnime(row, community, related = [], known = new Map()) {
   const title = String(row.title || 'Untitled');
   const pageUrl = `${ORIGIN}${animePath(row)}`;
   const synopsis = stripTags(row.description);
@@ -373,25 +376,28 @@ function renderAnime(row, community, related = []) {
   const description = metaDescription(row, { community: published });
 
   /**
-   * anime_index has no `format` column, so a series and a film are not
-   * directly distinguishable. Defaulting everything to TVSeries would
-   * misclassify every anime movie, so the type is only ever claimed where
-   * something in the data actually proves it:
+   * AniList's `format` says outright what a title is, once the detail columns
+   * are synced: MOVIE is a Movie; TV, TV_SHORT and ONA are series; OVA,
+   * SPECIAL and MUSIC stay CreativeWork, the honest supertype.
+   *
+   * Rows synced before that have no format, so the type is only claimed where
+   * something in the data proves it — defaulting everything to TVSeries would
+   * misclassify every film:
    *
    *   episodes > 1                -> TVSeries. More than one episode is a series.
    *   episodes null + airing      -> TVSeries. AniList leaves the count null
    *                                  while a show is still running, which is
    *                                  why One Piece arrives here with no episode
    *                                  count at all. A film does not "air".
-   *   everything else             -> CreativeWork, the honest supertype.
-   *
-   * That last bucket is mostly episodes === 1, which is a film or a one-shot
-   * OVA and genuinely ambiguous. 799 of 22,078 rows carry a null count.
+   *   everything else             -> CreativeWork. Mostly episodes === 1: a
+   *                                  film or a one-shot OVA, genuinely ambiguous.
    */
   const type =
-    (row.episodes && row.episodes > 1) || (!row.episodes && row.status === 'airing')
-      ? 'TVSeries'
-      : 'CreativeWork';
+    row.format === 'MOVIE' ? 'Movie'
+    : ['TV', 'TV_SHORT', 'ONA'].includes(row.format) ? 'TVSeries'
+    : row.format ? 'CreativeWork'
+    : (row.episodes && row.episodes > 1) || (!row.episodes && row.status === 'airing') ? 'TVSeries'
+    : 'CreativeWork';
 
   const work = {
     '@type': type,
@@ -406,7 +412,16 @@ function renderAnime(row, community, related = []) {
   if (row.cover_image) work.image = row.cover_image;
   if (genres.length) work.genre = genres;
   if (type === 'TVSeries' && row.episodes) work.numberOfEpisodes = row.episodes;
+  if (type === 'Movie' && row.duration) work.duration = `PT${row.duration}M`;
   if (year) work.startDate = year;
+  if (row.studios?.length) work.productionCompany = row.studios.map((name) => ({ '@type': 'Organization', name }));
+  // The same work on the two databases search engines already know it from,
+  // so this page is understood as that entity rather than a lookalike.
+  const anilistId = row.anilist_id || Number(String(row.id).replace(/^anilist-/, ''));
+  work.sameAs = [
+    `https://anilist.co/anime/${anilistId}`,
+    row.mal_id ? `https://myanimelist.net/anime/${row.mal_id}` : null,
+  ].filter(Boolean);
 
   /**
    * Only Rebyuu's own ratings are ever marked up. The AniList score displayed
@@ -454,6 +469,7 @@ function renderAnime(row, community, related = []) {
       ${year ? `<div><dt style="display:inline;font-weight:600">Year: </dt><dd style="display:inline;margin:0">${escapeHtml(year)}</dd></div>` : ''}
       <div><dt style="display:inline;font-weight:600">Status: </dt><dd style="display:inline;margin:0">${escapeHtml(statusWord)}</dd></div>
       ${row.episodes ? `<div><dt style="display:inline;font-weight:600">Episodes: </dt><dd style="display:inline;margin:0">${escapeHtml(String(row.episodes))}</dd></div>` : ''}
+      ${titleFacts(row).map((f) => `<div><dt style="display:inline;font-weight:600">${escapeHtml(f.label)}: </dt><dd style="display:inline;margin:0">${escapeHtml(f.value)}</dd></div>`).join('\n      ')}
       ${genres.length ? `<div><dt style="display:inline;font-weight:600">Genres: </dt><dd style="display:inline;margin:0">${escapeHtml(genres.join(', '))}</dd></div>` : ''}
       ${row.rating != null ? `<div><dt style="display:inline;font-weight:600">AniList score: </dt><dd style="display:inline;margin:0">${escapeHtml(Number(row.rating).toFixed(1))}/10</dd></div>` : ''}
       ${community && community.count >= MIN_RATINGS_FOR_SCORE
@@ -470,6 +486,10 @@ function renderAnime(row, community, related = []) {
       ${synopsis ? `<h2 style="font-family:Anton,Impact,sans-serif;font-size:22px;margin-top:24px">Synopsis</h2>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7">${escapeHtml(synopsis)}</p>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.7;margin-top:10px">Synopsis, artwork and score via <a href="https://anilist.co">AniList</a>. See <a href="/about">About</a> for full sourcing.</p>` : ''}
+      ${renderWhereToWatch(row)}
+      ${renderNextEpisode(row)}
+      ${renderQuickAnswers(row)}
+      ${renderRelations(row, known)}
       ${renderTitleList({ heading: 'More like this', items: related })}
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:20px"><a href="/browse">Browse more anime</a></p>
     </main>`;
@@ -537,6 +557,65 @@ function renderProse(meta) {
   );
 }
 
+const H2 = 'style="font-family:Anton,Impact,sans-serif;font-size:22px;margin-top:28px"';
+const P = 'style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7"';
+const NOTE = 'style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.7;margin-top:6px"';
+const DT = 'style="display:inline;font-weight:600"';
+const DD = 'style="display:inline;margin:0"';
+
+/** "Where to watch <title>": the streaming services AniList lists, linked. */
+function renderWhereToWatch(row) {
+  const links = Array.isArray(row.streaming) ? row.streaming : [];
+  if (!links.length) return '';
+  const title = escapeHtml(row.title || 'Untitled');
+  return `
+      <section>
+        <h2 ${H2}>Where to watch ${title}</h2>
+        <p ${P}>${links.map((l) => `<a href="${escapeHtml(l.url)}" rel="noopener">${escapeHtml(l.site)}</a>`).join(' · ')}</p>
+        <p ${NOTE}>Availability varies by country. Services as listed on AniList.</p>
+      </section>`;
+}
+
+/** When the next episode airs, while that is still in the future. */
+function renderNextEpisode(row) {
+  const next = nextEpisode(row);
+  if (!next || row.status !== 'airing') return '';
+  return `
+      <section>
+        <h2 ${H2}>When is the next episode of ${escapeHtml(row.title || 'Untitled')}?</h2>
+        <p ${P}>Episode ${next.episode} airs on <time datetime="${next.at.toISOString()}">${escapeHtml(formatAiring(next.at, { timeZone: 'UTC' }))}</time>.</p>
+      </section>`;
+}
+
+/** The questions people search a title with, answered from its data. */
+function renderQuickAnswers(row) {
+  const answers = quickAnswers(row, { timeZone: 'UTC' });
+  if (!answers.length) return '';
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')}: quick answers</h2>
+        ${answers.map((qa) => `<h3 style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;font-weight:600;margin-top:14px">${escapeHtml(qa.question)}</h3>
+        <p ${P}>${escapeHtml(qa.answer)}</p>`).join('\n        ')}
+      </section>`;
+}
+
+/** Prequels, sequels and side stories — the watch order people search for. */
+function renderRelations(row, known) {
+  const groups = relationGroups(row, known);
+  if (!groups.length) return '';
+  const item = (it) => {
+    const name = it.path ? `<a href="${escapeHtml(it.path)}">${escapeHtml(it.title)}</a>` : escapeHtml(it.title);
+    return `${name}${it.year ? ` (${escapeHtml(String(it.year))})` : ''}`;
+  };
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')} seasons and related anime</h2>
+        <dl ${P}>
+          ${groups.map((g) => `<div><dt ${DT}>${escapeHtml(g.label)}: </dt><dd ${DD}>${g.items.map(item).join(' · ')}</dd></div>`).join('\n          ')}
+        </dl>
+      </section>`;
+}
+
 /** A well-formed id with no row behind it is a genuine 404, not a soft one. */
 function renderMissing() {
   return injectHead(
@@ -580,7 +659,10 @@ export default async function handler(req, res) {
         community = { average: Math.round((total / ratings.length) * 10) / 10, count: ratings.length };
       }
 
-      return send(res, 200, renderAnime(rows[0], community, await loadRelated(rows[0])));
+      const row = rows[0];
+      const relationIds = (Array.isArray(row.relations) ? row.relations : []).map((r) => r.id);
+      const [related, known] = await Promise.all([loadRelated(row), rowsById(relationIds)]);
+      return send(res, 200, renderAnime(row, community, related, known));
     }
 
     const variant = isVariant(url);
