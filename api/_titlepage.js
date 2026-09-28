@@ -45,6 +45,52 @@ function kindOf(row) {
   }
 }
 
+/** Latin letters (with diacritics), digits, punctuation, symbols and spaces. */
+const LATIN = /^[\p{Script=Latin}\p{N}\p{P}\p{S}\s]+$/u;
+
+/**
+ * The language of a name, from its script, or null when the script does not
+ * settle it. Kana is Japanese and Hangul is Korean; Han characters alone could
+ * be Japanese or Chinese, and Latin text is in the page's own language.
+ */
+export function nameLang(name) {
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(name)) return 'ja';
+  if (/\p{Script=Hangul}/u.test(name)) return 'ko';
+  return null;
+}
+
+/** At most this many synonyms are shown; AniList lists up to ~20 translations. */
+const MAX_SYNONYMS = 3;
+
+/**
+ * Every other name the title is searched by: the romaji or English title
+ * (whichever is not the one displayed), the native-script title, then up to
+ * three Latin-script synonyms. People search "Sousou no Frieren" as often as
+ * "Frieren: Beyond Journey's End", and a page that never says the former
+ * cannot match it. Empty until the name columns are synced.
+ */
+export function otherNames(row) {
+  const seen = new Set([String(row.title || '').trim().toLowerCase()]);
+  const out = [];
+  const add = (name) => {
+    const clean = String(name || '').trim();
+    const key = clean.toLowerCase();
+    if (!clean || seen.has(key)) return false;
+    seen.add(key);
+    out.push(clean);
+    return true;
+  };
+  add(row.title_romaji);
+  add(row.title_english);
+  add(row.title_native);
+  let synonyms = 0;
+  for (const name of row.synonyms || []) {
+    if (synonyms === MAX_SYNONYMS) break;
+    if (LATIN.test(name) && add(name)) synonyms++;
+  }
+  return out;
+}
+
 export function titleTag(row) {
   const name = String(row.title || 'Untitled');
   const base = row.year ? `${name} (${row.year})` : name;
@@ -65,7 +111,9 @@ function factSentence(row) {
     genres || null,
     kindOf(row),
   ].filter(Boolean);
-  let sentence = `${name} is ${article(words[0])} ${words.join(' ')}`;
+  // The first other name in Latin script, so a search by romaji matches too.
+  const alias = otherNames(row).find((n) => LATIN.test(n));
+  let sentence = `${name}${alias ? ` (${alias})` : ''} is ${article(words[0])} ${words.join(' ')}`;
   if (row.episodes > 1) sentence += ` with ${row.episodes} episodes`;
   if (row.status === 'airing') sentence += ', currently airing';
   return `${sentence}.`;

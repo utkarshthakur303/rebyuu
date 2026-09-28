@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { useNoIndex } from '@/utils/useNoIndex';
 import { useAnimeTitle } from '@/context/TitleLangContext';
 import { useSeo } from '@/utils/useSeo';
-import { titleTag, metaDescription } from '../../../api/_titlepage.js';
+import { titleTag, metaDescription, otherNames, nameLang } from '../../../api/_titlepage.js';
 import { animePath } from '../../../api/_paths.js';
 
 export default function AnimeDetailPage() {
@@ -30,6 +30,8 @@ export default function AnimeDetailPage() {
   const [community, setCommunity] = useState<CommunityScore | null>(null);
   const [related, setRelated] = useState<Anime[]>([]);
   const displayTitle = useAnimeTitle(anime);
+  // With the JP switch on, the heading is already the romaji title.
+  const aliases = anime ? otherNames(anime).filter((name: string) => name !== displayTitle) : [];
 
   /**
    * A well-formed /anime/anilist-<n> URL for a row that does not exist still
@@ -322,6 +324,20 @@ export default function AnimeDetailPage() {
             <h1 className="mb-3 sm:mb-4 text-xl sm:text-2xl md:text-3xl lg:text-4xl text-foreground leading-tight" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
               {displayTitle || 'Loading...'}
             </h1>
+
+            {/* Every other name the title is searched by — the same list the
+                served HTML and the structured data carry. */}
+            {aliases.length > 0 && (
+              <p className="-mt-1 mb-3 sm:mb-4 text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                Also known as{' '}
+                {aliases.map((name, i) => (
+                  <span key={name}>
+                    {i > 0 && ' · '}
+                    <span lang={nameLang(name) ?? undefined}>{name}</span>
+                  </span>
+                ))}
+              </p>
+            )}
 
             <div className="mb-3 sm:mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Two scores, and it must be obvious which is which. The starred

@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { changedIds, planWrite, submitToIndexNow, INDEXNOW_KEY } from '../scripts/indexNow.mjs';
+import { changedIds, planWrite, submitToIndexNow, INDEXNOW_KEY, SYNCED_COLUMNS } from '../scripts/indexNow.mjs';
+import { DETAIL_COLUMNS } from '../scripts/animeRow.mjs';
+
+const DETAILED = [...SYNCED_COLUMNS, ...DETAIL_COLUMNS];
 import { anime } from './helpers.mjs';
 
 const stored = anime(1, 'Show', { rating: 8.5, genres: ['Action', 'Drama'], year: 2024, status: 'airing', episodes: 12 });
@@ -23,6 +26,23 @@ test('a rating, status or episode change counts as changed', () => {
 test('a numeric rating read back as a string is not a change', () => {
   // numeric columns can round-trip as strings depending on the client.
   assert.deepEqual(changedIds([{ ...stored, rating: '8.5' }], [stored]), []);
+});
+
+test('JSON columns compare by content, whatever order Postgres returns their keys in', () => {
+  // jsonb does not keep key order; the stored copy comes back reordered.
+  const incoming = { ...stored, streaming: [{ site: 'Netflix', url: 'https://n' }], relations: [{ id: 'anilist-2', relation: 'SEQUEL', title: 'S2', year: 2026, format: 'TV' }] };
+  const fromDb = { ...stored, streaming: [{ url: 'https://n', site: 'Netflix' }], relations: [{ year: 2026, format: 'TV', title: 'S2', id: 'anilist-2', relation: 'SEQUEL' }] };
+
+  assert.deepEqual(changedIds([fromDb], [incoming], DETAILED), []);
+  assert.deepEqual(changedIds([fromDb], [{ ...incoming, streaming: [] }], DETAILED), ['anilist-1']);
+});
+
+test('a timestamp read back in Postgres format is not a change', () => {
+  const incoming = { ...stored, next_episode: 5, next_episode_at: '2026-10-03T15:00:00.000Z' };
+  const fromDb = { ...stored, next_episode: 5, next_episode_at: '2026-10-03T15:00:00+00:00' };
+
+  assert.deepEqual(changedIds([fromDb], [incoming], DETAILED), []);
+  assert.deepEqual(changedIds([fromDb], [{ ...incoming, next_episode_at: '2026-10-10T15:00:00.000Z' }], DETAILED), ['anilist-1']);
 });
 
 test('columns the sync does not write are ignored', () => {

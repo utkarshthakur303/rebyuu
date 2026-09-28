@@ -24,6 +24,21 @@ export interface Anime {
   cover_image: string;
   banner_image: string | null;
   trailer: string | null;
+  /* Detail columns (supabase/title_details_migration.sql). Absent on rows
+     read before that migration runs, so every one is optional. */
+  title_romaji?: string | null;
+  title_english?: string | null;
+  title_native?: string | null;
+  synonyms?: string[];
+  format?: string | null;
+  source?: string | null;
+  duration?: number | null;
+  studios?: string[];
+  mal_id?: number | null;
+  streaming?: { site: string; url: string }[];
+  relations?: { id: string; relation: string; title: string | null; year: number | null; format: string | null }[];
+  next_episode?: number | null;
+  next_episode_at?: string | null;
 }
 
 export interface Review {

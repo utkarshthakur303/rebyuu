@@ -2,7 +2,7 @@ import { SHELL } from './_shell.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath } from './_paths.js';
-import { titleTag, metaDescription } from './_titlepage.js';
+import { titleTag, metaDescription, otherNames, nameLang } from './_titlepage.js';
 
 /**
  * Server-rendered metadata and content for the two routes that matter to
@@ -400,6 +400,8 @@ function renderAnime(row, community, related = []) {
     name: title,
     inLanguage: 'en',
   };
+  const aliases = otherNames(row);
+  if (aliases.length) work.alternateName = aliases;
   if (synopsis) work.description = truncate(synopsis, 5000);
   if (row.cover_image) work.image = row.cover_image;
   if (genres.length) work.genre = genres;
@@ -463,6 +465,7 @@ function renderAnime(row, community, related = []) {
     ${bannerHtml}
     <main class="mx-auto max-w-4xl px-4 py-8">
       <h1 class="uppercase" style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,52px);line-height:0.95">${escapeHtml(title)}</h1>
+      ${aliases.length ? `<p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:14px;opacity:.75;margin-top:8px">Also known as ${aliases.map((a) => `<span${nameLang(a) ? ` lang="${nameLang(a)}"` : ''}>${escapeHtml(a)}</span>`).join(' · ')}</p>` : ''}
       ${factsHtml}
       ${synopsis ? `<h2 style="font-family:Anton,Impact,sans-serif;font-size:22px;margin-top:24px">Synopsis</h2>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7">${escapeHtml(synopsis)}</p>

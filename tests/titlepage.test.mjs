@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { titleTag, metaDescription } from '../api/_titlepage.js';
+import { titleTag, metaDescription, otherNames, nameLang } from '../api/_titlepage.js';
 import { anime } from './helpers.mjs';
 
 const frieren = anime(154587, "Frieren: Beyond Journey's End", {
@@ -68,4 +68,44 @@ test('the Rebyuu community score is preferred to AniList\'s once it exists', () 
   const d = metaDescription(frieren, { community: { average: 8.4, count: 12 } });
   assert.match(d, /Rebyuu users rate it 8\.4\/10\./);
   assert.doesNotMatch(d, /AniList/);
+});
+
+// ── other names ────────────────────────────────────────────────────────
+
+const named = {
+  ...frieren,
+  title_english: "Frieren: Beyond Journey's End",
+  title_romaji: 'Sousou no Frieren',
+  title_native: '葬送のフリーレン',
+  synonyms: ['Frieren at the Funeral', '장송의 프리렌', 'Sōsō no Furīren', 'sousou no frieren', 'Frieren - Oltre la Fine del Viaggio', 'Frieren: Tras finalizar el viaje'],
+};
+
+test('other names: romaji, then native script, then up to three Latin-script synonyms', () => {
+  assert.deepEqual(otherNames(named), [
+    'Sousou no Frieren',
+    '葬送のフリーレン',
+    'Frieren at the Funeral',
+    'Sōsō no Furīren',
+    'Frieren - Oltre la Fine del Viaggio',
+  ]);
+});
+
+test('a name identical to the display title, in any case, is not repeated', () => {
+  const onePiece = anime(21, 'ONE PIECE', { title_english: 'ONE PIECE', title_romaji: 'ONE PIECE', title_native: 'ONE PIECE', synonyms: ['One Piece', 'OP'] });
+  assert.deepEqual(otherNames(onePiece), ['OP']);
+});
+
+test('a title synced before the name columns existed has no other names', () => {
+  assert.deepEqual(otherNames(frieren), []);
+});
+
+test('the description names the romaji title people also search by', () => {
+  assert.match(metaDescription(named), /^Frieren: Beyond Journey's End \(Sousou no Frieren\) is a 2023 /);
+});
+
+test('a name is tagged with a language only when its script says which', () => {
+  assert.equal(nameLang('葬送のフリーレン'), 'ja'); // kana
+  assert.equal(nameLang('장송의 프리렌'), 'ko');
+  assert.equal(nameLang('天官赐福'), null); // Han only: Japanese or Chinese
+  assert.equal(nameLang('Sousou no Frieren'), null); // the page's own language
 });

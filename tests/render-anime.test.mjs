@@ -71,6 +71,26 @@ test('the stored score is labelled as AniList\'s, which is where the sync reads 
   assert.doesNotMatch(root, /MyAnimeList score/);
 });
 
+test('a title page shows the other names it goes by, and marks them up as alternateName', async () => {
+  const named = { ...target, title_romaji: 'Taagetto Shou', title_native: 'ターゲット・ショー', synonyms: ['The Target'] };
+  installFetch({ tables: { anime_index: [named], ratings: [] } });
+
+  const { body } = await render(handler, 'route=anime&id=anilist-1');
+
+  assert.match(rootOf(body), /Also known as <span>Taagetto Shou<\/span> · <span lang="ja">ターゲット・ショー<\/span> · <span>The Target<\/span>/);
+  const ld = JSON.parse(body.match(/<script type="application\/ld\+json">(.*?)<\/script>/s)[1].replace(/\\u003c/g, '<').replace(/\\u003e/g, '>').replace(/\\u0026/g, '&'));
+  assert.deepEqual(ld['@graph'][0].alternateName, ['Taagetto Shou', 'ターゲット・ショー', 'The Target']);
+});
+
+test('before the migration, a title page renders without the name line', async () => {
+  installFetch({ tables: { anime_index: [target], ratings: [] } });
+
+  const { body } = await render(handler, 'route=anime&id=anilist-1');
+
+  assert.doesNotMatch(body, /Also known as/);
+  assert.doesNotMatch(body, /alternateName/);
+});
+
 test('an unknown title id is still a real 404', async () => {
   installFetch({ tables: { anime_index: [target], ratings: [] } });
 
