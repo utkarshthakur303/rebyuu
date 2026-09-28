@@ -285,9 +285,9 @@ function send(res, status, html) {
 }
 
 function renderHome(rails = []) {
-  const title = 'Rebyuu — Anime discovery, tracking and reviews';
+  const title = 'Rebyuu — Anime tracker, ratings and reviews';
   const description =
-    'Browse roughly 22,000 anime by genre, season and status, with live trending and currently-airing rankings. Track what you have watched and rate what you finish. No account needed to browse.';
+    "Track the anime you watch, rate and review what you finish, and keep your own lists. See what's trending and airing now across 22,000 titles.";
 
   const ld = {
     '@context': 'https://schema.org',
