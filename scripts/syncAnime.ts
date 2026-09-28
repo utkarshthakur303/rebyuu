@@ -2,6 +2,7 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
 import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
+import { changedIds, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
 const ANILIST_API = 'https://graphql.anilist.co';
 
 const ANILIST_QUERY = `
@@ -143,10 +144,11 @@ async function fetchAniListPage(
   throw new Error('AniList rate limit not cleared after 5 attempts');
 }
 
+/** Upserts one page of titles. Returns the ids whose stored row it actually changed. */
 async function syncAnimeToSupabase(
   supabase: ReturnType<typeof createClient>,
   media: AniListMedia[]
-): Promise<void> {
+): Promise<string[]> {
   const animeData = media.map((m) => {
     const title = m.title.english || m.title.romaji;
     const trailerUrl = m.trailer?.site === 'youtube' && m.trailer?.id
@@ -170,6 +172,15 @@ async function syncAnimeToSupabase(
     };
   });
 
+  // Read the rows as they stand before the upsert overwrites them, so the
+  // IndexNow submission can be limited to titles that really changed. If the
+  // read fails, report nothing rather than every row as changed.
+  const { data: existing, error: readError } = await supabase
+    .from('anime_index')
+    .select(['id', ...SYNCED_COLUMNS].join(','))
+    .in('id', animeData.map((a) => a.id));
+  const changed = readError ? [] : changedIds(existing ?? [], animeData);
+
   const { error } = await supabase.from('anime_index').upsert(animeData, {
     onConflict: 'id',
     ignoreDuplicates: false
@@ -178,6 +189,8 @@ async function syncAnimeToSupabase(
   if (error) {
     throw new Error(`Supabase upsert error: ${error.message}`);
   }
+
+  return changed;
 }
 
 interface Pass {
@@ -209,7 +222,8 @@ const FULL_PASSES: Pass[] = [
 
 async function runPass(
   supabase: ReturnType<typeof createClient>,
-  pass: Pass
+  pass: Pass,
+  changed: Set<string>
 ): Promise<number> {
   console.log(`\n── pass: ${pass.label} (${pass.sort}${pass.status ? ' / ' + pass.status : ''}) ──`);
   let synced = 0;
@@ -219,7 +233,7 @@ async function runPass(
       const { data, hasNextPage } = await fetchAniListPage(page, 50, pass.sort, pass.status);
       if (!data.length) break;
 
-      await syncAnimeToSupabase(supabase, data);
+      for (const id of await syncAnimeToSupabase(supabase, data)) changed.add(id);
       synced += data.length;
       console.log(`  page ${page}: +${data.length} (pass total ${synced})`);
 
@@ -250,15 +264,18 @@ async function syncAnime() {
   console.log(`Starting AniList sync (mode=${mode})...`);
   const started = Date.now();
   let total = 0;
+  const changed = new Set<string>();
 
   for (const pass of passes) {
-    total += await runPass(supabase, pass);
+    total += await runPass(supabase, pass, changed);
     await sleep(REQUEST_INTERVAL_MS);
   }
 
   const mins = ((Date.now() - started) / 60000).toFixed(1);
   // Rows overlap between passes, so this counts upserts, not distinct titles.
-  console.log(`\nSync complete in ${mins} min. Rows upserted: ${total}`);
+  console.log(`\nSync complete in ${mins} min. Rows upserted: ${total}. Titles changed: ${changed.size}`);
+
+  await submitToIndexNow([...changed]);
 }
 
 syncAnime().catch(console.error);

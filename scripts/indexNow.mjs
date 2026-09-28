@@ -1,0 +1,71 @@
+/**
+ * IndexNow submission for the nightly catalogue sync.
+ *
+ * IndexNow tells Bing, Yandex, Seznam, Naver and the other participating
+ * engines that a URL changed, instead of waiting for them to recrawl it.
+ * Bing's index is also what Copilot and ChatGPT search draw on. Google does
+ * not take part, and needs no action here: the sitemap covers it.
+ *
+ * Only titles the sync actually changed are submitted. The fresh passes
+ * upsert every row they fetch, changed or not, and pinging a few hundred
+ * unchanged URLs every night is exactly the misuse IndexNow's documentation
+ * asks sites to avoid.
+ */
+
+export const INDEXNOW_KEY = '51e4575cc2fd6e7cdb863a444f00d95e';
+
+const HOST = 'www.rebyuu.app';
+const ENDPOINT = 'https://api.indexnow.org/indexnow';
+
+/** IndexNow accepts at most 10,000 URLs per request. */
+const MAX_URLS_PER_REQUEST = 10_000;
+
+/** The columns syncAnime.ts writes. Anything else on the row is ignored. */
+export const SYNCED_COLUMNS = [
+  'title', 'rating', 'genres', 'year', 'season', 'status',
+  'episodes', 'description', 'cover_image', 'banner_image', 'trailer',
+];
+
+function sameValue(column, a, b) {
+  if (a == null || b == null) return a == null && b == null;
+  // numeric columns can come back as strings depending on the client.
+  if (column === 'rating') return Number(a) === Number(b);
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
+/** Ids of `incoming` rows that are new, or differ from `existing` in a synced column. */
+export function changedIds(existing, incoming) {
+  const before = new Map(existing.map((row) => [row.id, row]));
+  return incoming
+    .filter((row) => {
+      const old = before.get(row.id);
+      return !old || SYNCED_COLUMNS.some((c) => !sameValue(c, old[c], row[c]));
+    })
+    .map((row) => row.id);
+}
+
+/**
+ * Submits the title pages for `ids`. Never throws: a failed ping must not
+ * fail the sync that has already written the catalogue.
+ */
+export async function submitToIndexNow(ids, { fetchImpl = fetch, log = console.log } = {}) {
+  const urls = ids.map((id) => `https://${HOST}/anime/${id}`);
+  for (let i = 0; i < urls.length; i += MAX_URLS_PER_REQUEST) {
+    const urlList = urls.slice(i, i + MAX_URLS_PER_REQUEST);
+    try {
+      const res = await fetchImpl(ENDPOINT, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        body: JSON.stringify({
+          host: HOST,
+          key: INDEXNOW_KEY,
+          keyLocation: `https://${HOST}/${INDEXNOW_KEY}.txt`,
+          urlList,
+        }),
+      });
+      log(`IndexNow: ${urlList.length} URLs submitted, HTTP ${res.status}`);
+    } catch (error) {
+      log(`IndexNow: submission failed: ${error instanceof Error ? error.message : error}`);
+    }
+  }
+}
