@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCanonical } from '@/utils/useCanonical';
+import { useSeo } from '@/utils/useSeo';
+import { PAGES } from '../../../api/_pages.js';
 import { Filter, X, ChevronLeft, ChevronRight, AlertTriangle, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimeCard } from '@/app/components/AnimeCard';
@@ -90,6 +92,7 @@ export default function BrowsePage() {
    * engine by being linked or shared rather than by being crawled.
    */
   useCanonical('/browse');
+  useSeo({ title: PAGES.browse.title, description: PAGES.browse.description });
 
   const [searchParams, setSearchParams] = useSearchParams();
   // Memoised on the serialised string, not the object: a URLSearchParams
@@ -421,7 +424,7 @@ export default function BrowsePage() {
                   className="mb-1 text-2xl sm:text-3xl md:text-4xl text-foreground"
                   style={{ fontFamily: 'Anton, Impact, sans-serif' }}
                 >
-                  Browse Archive
+                  {PAGES.browse.heading}
                 </h1>
                 <p
                   className="text-xs sm:text-sm text-muted-foreground"

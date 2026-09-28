@@ -1,21 +1,17 @@
 import { Link } from 'react-router-dom';
 import { ProsePage, ProseH2 } from '@/app/components/ProsePage';
 import { useSeo } from '@/utils/useSeo';
+import { PAGES } from '../../../api/_pages.js';
 
 export default function PrivacyPage() {
-  useSeo({
-    title: 'Privacy Policy — Rebyuu',
-    description:
-      'What Rebyuu stores, who it is shared with, and how to delete it. Written to describe what the application actually does.',
-    path: '/privacy',
-  });
+  useSeo(PAGES.privacy);
 
   return (
     <ProsePage
-      eyebrow="Legal"
-      title="Privacy Policy"
-      standfirst="Written to describe what this application actually does, rather than to cover every conceivable thing it might one day do."
-      updated="24 August 2026"
+      eyebrow={PAGES.privacy.eyebrow}
+      title={PAGES.privacy.heading}
+      standfirst={PAGES.privacy.standfirst}
+      updated={PAGES.privacy.updated}
     >
       <ProseH2>The short version</ProseH2>
       <p>

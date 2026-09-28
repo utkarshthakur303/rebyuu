@@ -1,21 +1,17 @@
 import { Link } from 'react-router-dom';
 import { ProsePage, ProseH2 } from '@/app/components/ProsePage';
 import { useSeo } from '@/utils/useSeo';
+import { PAGES } from '../../../api/_pages.js';
 
 export default function TermsPage() {
-  useSeo({
-    title: 'Terms of Service — Rebyuu',
-    description:
-      'The terms you agree to by using Rebyuu: what you may do, what you own, and what we do not guarantee.',
-    path: '/terms',
-  });
+  useSeo(PAGES.terms);
 
   return (
     <ProsePage
-      eyebrow="Legal"
-      title="Terms of Service"
-      standfirst="Plain terms for a small site. Using Rebyuu means agreeing to these."
-      updated="24 August 2026"
+      eyebrow={PAGES.terms.eyebrow}
+      title={PAGES.terms.heading}
+      standfirst={PAGES.terms.standfirst}
+      updated={PAGES.terms.updated}
     >
       <ProseH2>What Rebyuu offers</ProseH2>
       <p>

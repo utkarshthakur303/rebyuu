@@ -19,7 +19,7 @@
     },
     {
       "source": "/browse",
-      "destination": "/app.html"
+      "destination": "/api/render?route=browse"
     },
     {
       "source": "/login",
@@ -39,15 +39,15 @@
     },
     {
       "source": "/about",
-      "destination": "/app.html"
+      "destination": "/api/render?route=about"
     },
     {
       "source": "/terms",
-      "destination": "/app.html"
+      "destination": "/api/render?route=terms"
     },
     {
       "source": "/privacy",
-      "destination": "/app.html"
+      "destination": "/api/render?route=privacy"
     },
     {
       "source": "/anime/:id(anilist-\\d+)",

@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { ProsePage, ProseH2, ProseH3 } from '@/app/components/ProsePage';
 import { useSeo } from '@/utils/useSeo';
+import { PAGES } from '../../../api/_pages.js';
 
 /**
  * The site's only page that says who is behind it and where the data comes
@@ -10,19 +11,14 @@ import { useSeo } from '@/utils/useSeo';
  * scored 3/100 on.
  */
 export default function AboutPage() {
-  useSeo({
-    title: 'About Rebyuu — what this is, and where the data comes from',
-    description:
-      'Rebyuu is an anime discovery and review site built on AniList and MyAnimeList data. What is ours, what is theirs, and how the scores work.',
-    path: '/about',
-  });
+  useSeo(PAGES.about);
 
   return (
     <ProsePage
-      eyebrow="Colophon"
-      title="About Rebyuu"
-      standfirst="An anime discovery and review site built on top of open catalogue data. This page explains exactly which parts are ours and which are borrowed, because that distinction matters more here than on most sites."
-      updated="24 August 2026"
+      eyebrow={PAGES.about.eyebrow}
+      title={PAGES.about.heading}
+      standfirst={PAGES.about.standfirst}
+      updated={PAGES.about.updated}
     >
       <ProseH2>What Rebyuu is</ProseH2>
       <p>

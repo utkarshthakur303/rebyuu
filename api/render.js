@@ -1,5 +1,6 @@
 import { SHELL } from './_shell.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
+import { PAGES } from './_pages.js';
 
 /**
  * Server-rendered metadata and content for the two routes that matter to
@@ -60,6 +61,12 @@ const HOME_RAILS = [
   { key: 'airing', heading: 'Airing Now', subtitle: 'Currently broadcasting', sort: 'TRENDING_DESC', status: 'RELEASING', perPage: 50, fallback: 'status=eq.airing&order=rating.desc.nullslast' },
   { key: 'upcoming', heading: 'Upcoming', subtitle: 'Anticipated releases', sort: 'POPULARITY_DESC', status: 'NOT_YET_RELEASED', perPage: 50, fallback: 'status=eq.upcoming&order=year.asc' },
 ];
+
+/** Titles on the first page of /browse. Mirrors PAGE_SIZE in BrowsePage.tsx. */
+const BROWSE_PAGE_SIZE = 24;
+
+/** Written pages rendered from their shared copy in _pages.js. */
+const PROSE_ROUTES = ['about', 'terms', 'privacy'];
 
 /** A slow AniList must not hold a crawler's request open; the archive fallback is fine. */
 const ANILIST_TIMEOUT_MS = 2500;
@@ -125,6 +132,39 @@ async function anilist(query) {
   }
 }
 
+/** anime_index ids for an AniList `Page { media { id } }`, in ranking order. */
+const rankedIds = (pageData) => (pageData?.media ?? []).map((m) => `anilist-${m.id}`);
+
+/** One anime_index read for a set of ids, as a Map keyed by id. */
+async function rowsById(ids) {
+  const unique = [...new Set(ids)];
+  const rows = unique.length
+    ? await sb(`anime_index?id=in.(${unique.join(',')})&select=id,title,year`)
+    : [];
+  return new Map((Array.isArray(rows) ? rows : []).map((row) => [row.id, row]));
+}
+
+/**
+ * The first page of /browse as it opens with no filters: live AniList
+ * trending, 24 titles (PAGE_SIZE in BrowsePage.tsx), Hentai excluded as
+ * EXCLUDED_GENRES does there. Unlike the React page, which renders AniList's
+ * own records, ids missing from anime_index are dropped here — a served link
+ * to one of those would be a link to a 404. Falls back to the archive ordered
+ * by stored rating, as fetchArchiveBrowsePage does.
+ */
+async function loadBrowseFirstPage() {
+  const ranked = await anilist(`query {
+  browse: Page(page: 1, perPage: ${BROWSE_PAGE_SIZE}) { media(type: ANIME, sort: [TRENDING_DESC], genre_not_in: ["Hentai"], isAdult: false) { id } }
+}`);
+  const ids = rankedIds(ranked?.browse);
+  const byId = await rowsById(ids);
+  const items = ids.map((id) => byId.get(id)).filter(Boolean);
+  if (items.length) return items;
+
+  const fallback = await sb(`anime_index?select=id,title,year&order=rating.desc.nullslast&limit=${BROWSE_PAGE_SIZE}`);
+  return Array.isArray(fallback) ? fallback : [];
+}
+
 /**
  * All four rails in one AniList request (one aliased Page per rail), then one
  * anime_index read to turn the ranked ids into titles. Each rail keeps its
@@ -137,15 +177,8 @@ async function loadHomeRails() {
   ).join('\n')}\n}`;
 
   const ranked = await anilist(query);
-  const idsByRail = HOME_RAILS.map((r) =>
-    (ranked?.[r.key]?.media ?? []).map((m) => `anilist-${m.id}`)
-  );
-
-  const allIds = [...new Set(idsByRail.flat())];
-  const rows = allIds.length
-    ? await sb(`anime_index?id=in.(${allIds.join(',')})&select=id,title,year`)
-    : [];
-  const byId = new Map((Array.isArray(rows) ? rows : []).map((row) => [row.id, row]));
+  const idsByRail = HOME_RAILS.map((r) => rankedIds(ranked?.[r.key]));
+  const byId = await rowsById(idsByRail.flat());
 
   return Promise.all(
     HOME_RAILS.map(async (rail, i) => {
@@ -441,6 +474,59 @@ function renderAnime(row, community, related = []) {
   return injectBody(html, content);
 }
 
+/**
+ * /browse: its heading, what it does, and the titles its unfiltered first page
+ * shows. Filtered variants (/browse?genre=…) reach this too — the query string
+ * rides along on the rewrite — and get the same unfiltered HTML, which is
+ * correct for them: they canonicalise to /browse and robots.txt keeps
+ * crawlers out of them. React renders the filtered grid on mount.
+ */
+function renderBrowse(items) {
+  const meta = PAGES.browse;
+  const content = `
+    <main class="mx-auto max-w-3xl px-4 py-16">
+      <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,44px);line-height:1">${escapeHtml(meta.heading)}</h1>
+      <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:17px;line-height:1.7;margin-top:14px">${escapeHtml(meta.description)}</p>
+      ${renderTitleList({ heading: 'Trending now', items })}
+      <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:24px"><a href="/">Home</a> · <a href="/about">About Rebyuu and its sources</a></p>
+    </main>`;
+
+  return injectBody(
+    injectHead(SHELL, {
+      title: meta.title,
+      description: meta.description,
+      canonical: `${ORIGIN}${meta.path}`,
+    }),
+    content
+  );
+}
+
+/**
+ * About, Terms and Privacy: the header block ProsePage renders — eyebrow,
+ * heading, standfirst, date — from the same copy the React pages use. The
+ * body prose stays client-rendered; what a non-JS crawler needed was a real
+ * title and description instead of the shell's shared ones.
+ */
+function renderProse(meta) {
+  const content = `
+    <article class="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
+      <p style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:.22em;text-transform:uppercase;margin-bottom:16px">${escapeHtml(meta.eyebrow)}</p>
+      <h1 class="uppercase" style="font-family:Anton,Impact,sans-serif;font-size:clamp(34px,7vw,60px);font-weight:400;line-height:0.95;margin-bottom:20px">${escapeHtml(meta.heading)}</h1>
+      <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:18px;line-height:1.7;margin-bottom:32px">${escapeHtml(meta.standfirst)}</p>
+      <p style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:.18em;text-transform:uppercase;opacity:.7">Last updated ${escapeHtml(meta.updated)}</p>
+      <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:24px"><a href="/about">About</a> · <a href="/privacy">Privacy Policy</a> · <a href="/terms">Terms of Service</a> · <a href="/browse">Browse anime</a></p>
+    </article>`;
+
+  return injectBody(
+    injectHead(SHELL, {
+      title: meta.title,
+      description: meta.description,
+      canonical: `${ORIGIN}${meta.path}`,
+    }),
+    content
+  );
+}
+
 /** A well-formed id with no row behind it is a genuine 404, not a soft one. */
 function renderMissing() {
   return injectHead(
@@ -486,6 +572,9 @@ export default async function handler(req, res) {
 
       return send(res, 200, renderAnime(rows[0], community, await loadRelated(rows[0])));
     }
+
+    if (route === 'browse') return send(res, 200, renderBrowse(await loadBrowseFirstPage()));
+    if (PROSE_ROUTES.includes(route)) return send(res, 200, renderProse(PAGES[route]));
 
     return send(res, 200, renderHome(await loadHomeRails()));
   } catch {
