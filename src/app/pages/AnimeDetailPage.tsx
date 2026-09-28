@@ -549,7 +549,7 @@ export default function AnimeDetailPage() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Reviews</h2>
+            <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>{displayTitle ? `${displayTitle} reviews` : 'Reviews'}</h2>
 
             {user && (
               <form onSubmit={handleSubmitReview} className="mb-4 sm:mb-6 rounded-lg border border-ink/20 bg-card p-4 sm:p-5 md:p-6">

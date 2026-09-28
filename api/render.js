@@ -159,6 +159,17 @@ const rankedIds = (pageData) => (pageData?.media ?? []).map((m) => `anilist-${m.
 /** Comments shown on an episode page, newest first. */
 const THREAD_SIZE = 20;
 
+/** Reviews served on a title page, newest first. React shows them all. */
+const REVIEWS_SHOWN = 10;
+
+/** user id -> username, for the authors of reviews and comments. */
+async function loadUsernames(ids) {
+  const unique = [...new Set(ids.filter(Boolean))];
+  if (!unique.length) return new Map();
+  const users = await sb(`users?id=in.(${unique.map(encodeURIComponent).join(',')})&select=id,username`);
+  return new Map((Array.isArray(users) ? users : []).map((u) => [u.id, u.username]));
+}
+
 /** Comment and rating counts per episode of one title. */
 async function loadEpisodeActivity(id) {
   const key = encodeURIComponent(id);
@@ -384,7 +395,7 @@ function renderHome(rails = []) {
   return injectBody(html, content);
 }
 
-function renderAnime(row, community, related = [], known = new Map(), activity = new Map()) {
+function renderAnime(row, community, related = [], known = new Map(), activity = new Map(), reviews = []) {
   const title = String(row.title || 'Untitled');
   const pageUrl = `${ORIGIN}${animePath(row)}`;
   const synopsis = stripTags(row.description);
@@ -456,6 +467,21 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
    * be both unverifiable and exactly what review-snippet spam guidance
    * targets. Below the threshold nothing is emitted at all.
    */
+  /**
+   * Reviews written by Rebyuu accounts, the same ones printed on the page —
+   * review markup must describe reviews a reader can see. Each carries its
+   * author's own score of the title when they left one. The body is the text
+   * exactly as the page prints it — reviews are plain text, so anything that
+   * looks like markup in one is what its author typed.
+   */
+  if (reviews.length) {
+    work.review = reviews.map((r) => {
+      const review = { '@type': 'Review', author: { '@type': 'Person', name: r.author }, datePublished: r.date, reviewBody: String(r.content ?? '').slice(0, 5000) };
+      if (r.rating != null) review.reviewRating = { '@type': 'Rating', ratingValue: r.rating, bestRating: 10, worstRating: 1 };
+      return review;
+    });
+  }
+
   if (community && community.count >= MIN_RATINGS_FOR_SCORE) {
     work.aggregateRating = {
       '@type': 'AggregateRating',
@@ -517,6 +543,7 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
       ${renderQuickAnswers(row)}
       ${renderRelations(row, known)}
       ${renderEpisodeGuide(row, activity)}
+      ${renderReviews(row, reviews)}
       ${renderTitleList({ heading: 'More like this', items: related })}
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:20px"><a href="/browse">Browse more anime</a></p>
     </main>`;
@@ -640,6 +667,19 @@ function renderRelations(row, known) {
         <dl ${P}>
           ${groups.map((g) => `<div><dt ${DT}>${escapeHtml(g.label)}: </dt><dd ${DD}>${g.items.map(item).join(' · ')}</dd></div>`).join('\n          ')}
         </dl>
+      </section>`;
+}
+
+/** Rebyuu reviews of the title — first-party writing, the page's own text. */
+function renderReviews(row, reviews) {
+  if (!reviews.length) return '';
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')} reviews</h2>
+        ${reviews.map((r) => `<article style="margin-top:16px">
+          <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.75"><strong>${escapeHtml(r.author)}</strong>${r.rating != null ? ` · ${escapeHtml(String(r.rating))}/10` : ''} · <time datetime="${escapeHtml(r.date)}">${escapeHtml(r.date)}</time></p>
+          <p ${P}>${escapeHtml(r.content)}</p>
+        </article>`).join('\n        ')}
       </section>`;
 }
 
@@ -780,9 +820,10 @@ export default async function handler(req, res) {
       const id = url.searchParams.get('id') || '';
       if (!/^anilist-\d+$/.test(id)) return send(res, 404, renderMissing());
 
-      const [rows, ratings] = await Promise.all([
+      const [rows, ratings, posts] = await Promise.all([
         sb(`anime_index?id=eq.${encodeURIComponent(id)}&select=*&limit=1`),
-        sb(`ratings?anime_id=eq.${encodeURIComponent(id)}&select=rating`),
+        sb(`ratings?anime_id=eq.${encodeURIComponent(id)}&select=user_id,rating`),
+        sb(`comments?anime_id=eq.${encodeURIComponent(id)}&select=id,user_id,content,created_at&order=created_at.desc&limit=${REVIEWS_SHOWN}`),
       ]);
 
       // A Supabase outage must not turn every title page into a 404. Falling
@@ -798,12 +839,22 @@ export default async function handler(req, res) {
 
       const row = rows[0];
       const relationIds = (Array.isArray(row.relations) ? row.relations : []).map((r) => r.id);
-      const [related, known, activity] = await Promise.all([
+      const reviewPosts = Array.isArray(posts) ? posts : [];
+      const [related, known, activity, authors] = await Promise.all([
         loadRelated(row),
         rowsById(relationIds),
         lastEpisode(row) ? loadEpisodeActivity(row.id) : new Map(),
+        loadUsernames(reviewPosts.map((p) => p.user_id)),
       ]);
-      return send(res, 200, renderAnime(row, community, related, known, activity));
+      // A reviewer's score is their rating of the title, if they left one.
+      const scoreBy = new Map((Array.isArray(ratings) ? ratings : []).map((r) => [r.user_id, r.rating]));
+      const reviews = reviewPosts.map((p) => ({
+        author: authors.get(p.user_id) || 'Anonymous',
+        rating: scoreBy.get(p.user_id) ?? null,
+        content: p.content,
+        date: String(p.created_at || '').slice(0, 10),
+      }));
+      return send(res, 200, renderAnime(row, community, related, known, activity, reviews));
     }
 
     if (route === 'episode') {
@@ -824,9 +875,7 @@ export default async function handler(req, res) {
       if (!row || !last || n < 1 || n > last) return send(res, 404, renderMissing());
 
       const posts = Array.isArray(thread) ? thread : [];
-      const userIds = [...new Set(posts.map((c) => c.user_id))];
-      const users = userIds.length ? await sb(`users?id=in.(${userIds.map(encodeURIComponent).join(',')})&select=id,username`) : [];
-      const authors = new Map((Array.isArray(users) ? users : []).map((u) => [u.id, u.username]));
+      const authors = await loadUsernames(posts.map((c) => c.user_id));
       return send(res, 200, renderEpisode(row, n, {
         ratings: Array.isArray(ratings) ? ratings : [],
         comments: Array.isArray(comments) ? comments : [],

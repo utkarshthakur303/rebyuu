@@ -195,6 +195,54 @@ test('before the migration none of the detail sections render, and sameAs still 
   assert.deepEqual(ldOf(body).sameAs, ['https://anilist.co/anime/1']);
 });
 
+const reviewTables = (extra = {}) => ({
+  anime_index: [target],
+  ratings: [
+    { anime_id: 'anilist-1', user_id: 'u1', rating: 9 },
+    { anime_id: 'anilist-1', user_id: 'u3', rating: 4 },
+  ],
+  comments: [
+    { id: 'c1', anime_id: 'anilist-1', user_id: 'u1', content: 'A <i>masterpiece</i> of pacing.', created_at: '2026-09-20T10:00:00Z' },
+    { id: 'c2', anime_id: 'anilist-1', user_id: 'u2', content: 'Slow start, great finish.', created_at: '2026-09-25T10:00:00Z' },
+  ],
+  users: [{ id: 'u1', username: 'kaori' }, { id: 'u2', username: 'arima' }],
+  ...extra,
+});
+
+test('a title page serves its Rebyuu reviews, newest first, with each reviewer\'s score', async () => {
+  installFetch({ tables: reviewTables() });
+
+  const reviews = section(rootOf((await render(handler, 'route=anime&id=anilist-1')).body), 'Target Show reviews');
+
+  assert.match(reviews, /arima[\s\S]*Slow start, great finish\.[\s\S]*kaori[\s\S]*9\/10[\s\S]*A &lt;i&gt;masterpiece&lt;\/i&gt; of pacing\./);
+});
+
+test('reviews are marked up as Review, rated where the reviewer rated', async () => {
+  installFetch({ tables: reviewTables() });
+
+  const work = ldOf((await render(handler, 'route=anime&id=anilist-1')).body);
+
+  assert.deepEqual(work.review, [
+    { '@type': 'Review', author: { '@type': 'Person', name: 'arima' }, datePublished: '2026-09-25', reviewBody: 'Slow start, great finish.' },
+    {
+      '@type': 'Review',
+      author: { '@type': 'Person', name: 'kaori' },
+      datePublished: '2026-09-20',
+      reviewBody: 'A <i>masterpiece</i> of pacing.',
+      reviewRating: { '@type': 'Rating', ratingValue: 9, bestRating: 10, worstRating: 1 },
+    },
+  ]);
+});
+
+test('a title with no reviews has no review section or markup', async () => {
+  installFetch({ tables: reviewTables({ comments: [] }) });
+
+  const { body } = await render(handler, 'route=anime&id=anilist-1');
+
+  assert.doesNotMatch(rootOf(body), /Target Show reviews/);
+  assert.equal(ldOf(body).review, undefined);
+});
+
 test('an unknown title id is still a real 404', async () => {
   installFetch({ tables: { anime_index: [target], ratings: [] } });
 
