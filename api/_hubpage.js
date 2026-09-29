@@ -2,7 +2,8 @@ import { SHELL } from './_shell.js';
 import { ORIGIN, escapeHtml, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
 import { sb, anilist } from './_upstream.js';
 import { animePath } from './_paths.js';
-import { hubPath, hubPreset, hubNavLinks } from './_hubs.js';
+import { hubPath, hubPreset, hubNavLinks, genrePath } from './_hubs.js';
+import { GENRES } from './_catalog.js';
 import { hubTitle, hubHeading, hubDescription, hubListHeading, hubLinksLabel, hubIntro } from './_hubcopy.js';
 import {
   HUB_PAGE_SIZE, servedLimit, hubQuery, readHubIds, readHubHasMore, readHubLinks,
@@ -74,13 +75,16 @@ export async function loadHub(hub, now = new Date()) {
 
 /**
  * The hub pages every served page links — this season, next season, airing,
- * upcoming — so a crawler that doesn't run the app can reach each from any.
+ * upcoming, top rated, and every genre — so a crawler that doesn't run the
+ * app can reach each from any.
  */
 export function renderHubLinks(now = new Date()) {
+  const links = (list) => list.map((l) => `<a href="${escapeHtml(l.path)}">${escapeHtml(l.label)}</a>`).join(' · ');
   return `
       <section style="margin-top:36px">
         <h2 style="font-family:Anton,Impact,sans-serif;font-size:26px;line-height:1.1">Seasons and charts</h2>
-        <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:10px">${hubNavLinks(now).map((l) => `<a href="${escapeHtml(l.path)}">${escapeHtml(l.label)}</a>`).join(' · ')}</p>
+        <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:10px">${links(hubNavLinks(now))}</p>
+        <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:6px">Genres: ${links(GENRES.map((g) => ({ label: g, path: genrePath(g) })))}</p>
       </section>`;
 }
 

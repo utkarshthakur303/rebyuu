@@ -1,10 +1,10 @@
 import { SHELL } from './_shell.js';
 import { ORIGIN, escapeHtml, stripTags, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
 import { sb, anilist, rankedIds, rowsById } from './_upstream.js';
-import { parseHubPath, hubPath } from './_hubs.js';
+import { parseHubPath, hubPath, genrePath } from './_hubs.js';
 import { HUB_MISSING } from './_hubcopy.js';
 import { loadHub, renderHub, renderHubLinks, HubDataError, LIST_COLUMNS, bootItem } from './_hubpage.js';
-import { EXCLUDED_GENRES } from './_catalog.js';
+import { EXCLUDED_GENRES, GENRES } from './_catalog.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath, parseAnimeRef } from './_paths.js';
@@ -408,7 +408,7 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
       <div><dt style="display:inline;font-weight:600">Status: </dt><dd style="display:inline;margin:0">${escapeHtml(statusWord)}</dd></div>
       ${row.episodes ? `<div><dt style="display:inline;font-weight:600">Episodes: </dt><dd style="display:inline;margin:0">${escapeHtml(String(row.episodes))}</dd></div>` : ''}
       ${titleFacts(row).map((f) => `<div><dt style="display:inline;font-weight:600">${escapeHtml(f.label)}: </dt><dd style="display:inline;margin:0">${f.path ? `<a href="${escapeHtml(f.path)}">${escapeHtml(f.value)}</a>` : escapeHtml(f.value)}</dd></div>`).join('\n      ')}
-      ${genres.length ? `<div><dt style="display:inline;font-weight:600">Genres: </dt><dd style="display:inline;margin:0">${escapeHtml(genres.join(', '))}</dd></div>` : ''}
+      ${genres.length ? `<div><dt style="display:inline;font-weight:600">Genres: </dt><dd style="display:inline;margin:0">${genres.map((g) => (GENRES.includes(g) ? `<a href="${escapeHtml(genrePath(g))}">${escapeHtml(g)}</a>` : escapeHtml(g))).join(', ')}</dd></div>` : ''}
       ${row.rating != null ? `<div><dt style="display:inline;font-weight:600">AniList score: </dt><dd style="display:inline;margin:0">${escapeHtml(Number(row.rating).toFixed(1))}/10</dd></div>` : ''}
       ${community && community.count >= MIN_RATINGS_FOR_SCORE
         ? `<div><dt style="display:inline;font-weight:600">Rebyuu community score: </dt><dd style="display:inline;margin:0">${escapeHtml(String(community.average))}/10 from ${escapeHtml(String(community.count))} ratings</dd></div>`
@@ -731,10 +731,12 @@ const HUB_PATHS = {
   season: (key) => `/seasons/${key}`,
   airing: () => '/airing',
   upcoming: () => '/upcoming',
+  top: (key) => (key ? `/top/${key}` : '/top'),
+  genre: (key) => `/genres/${key}`,
 };
 const hubPathname = (kind, key) => HUB_PATHS[kind]?.(key ?? '') ?? null;
 
-/** /seasons/fall-2026, /airing, /upcoming — see _hubs.js and _hubpage.js. */
+/** /seasons/fall-2026, /airing, /upcoming, /top, /top/2025, /genres/romance — see _hubs.js and _hubpage.js. */
 async function serveHub(res, url) {
   const pathname = hubPathname(url.searchParams.get('hub'), url.searchParams.get('key'));
   const hub = pathname ? parseHubPath(pathname) : null;
