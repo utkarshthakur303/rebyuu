@@ -62,12 +62,20 @@
       "destination": "/api/render?route=privacy"
     },
     {
+      "source": "/anime/:ref(\\d+[A-Za-z0-9-]*)/episode/:ep(\\d+)",
+      "destination": "/api/render?route=episode&ref=:ref&ep=:ep"
+    },
+    {
       "source": "/anime/:id(anilist-\\d+)/episode/:ep(\\d+)",
       "destination": "/api/render?route=episode&id=:id&ep=:ep"
     },
     {
       "source": "/anime/:id(anilist-\\d+)",
       "destination": "/api/render?route=anime&id=:id"
+    },
+    {
+      "source": "/anime/:ref(\\d+[A-Za-z0-9-]*)",
+      "destination": "/api/render?route=anime&ref=:ref"
     }
   ],
   "headers": [

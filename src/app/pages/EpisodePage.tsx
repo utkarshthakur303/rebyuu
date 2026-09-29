@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, CalendarClock, Star } from 'lucide-react';
 import { getAnimeById, getEpisodeActivity, getEpisodeRatings, type Anime } from '@/services/anime';
 import { EpisodeModal } from '@/app/components/EpisodeModal';
 import { useSeo } from '@/utils/useSeo';
 import { useNoIndex } from '@/utils/useNoIndex';
 import { useAnimeTitle } from '@/context/TitleLangContext';
-import { animePath } from '../../../api/_paths.js';
+import { animePath, parseAnimeRef } from '../../../api/_paths.js';
 import { nextEpisode, formatAiring } from '../../../api/_titlepage.js';
 import {
   lastEpisode,
@@ -29,9 +29,11 @@ type Activity = Map<number, { comments: number; ratings: number }>;
  * led to a quarter of a million empty pages. Visitors can open any of them.
  */
 export default function EpisodePage() {
-  const { id = '', ep = '' } = useParams();
+  const { id: ref = '', ep = '' } = useParams();
+  const id = parseAnimeRef(ref)?.id ?? '';
   const n = Number(ep);
   const navigate = useNavigate();
+  const location = useLocation();
   const [anime, setAnime] = useState<Anime | null>(null);
   const [loading, setLoading] = useState(true);
   const [activity, setActivity] = useState<Activity>(new Map());
@@ -72,6 +74,13 @@ export default function EpisodePage() {
       : { title: '' }
   );
   useNoIndex(!loading && !indexable);
+
+  // As on the title page: older URL forms are replaced with the canonical one.
+  useEffect(() => {
+    if (valid && location.pathname !== episodePath(anime, n)) {
+      navigate(episodePath(anime, n), { replace: true });
+    }
+  }, [valid, anime, n, location.pathname, navigate]);
 
   if (loading) {
     return (

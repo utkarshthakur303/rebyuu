@@ -165,7 +165,7 @@ test('relations are grouped under readable labels, linked when the title is in t
   const groups = relationGroups(detailed, known);
 
   assert.deepEqual(groups.map((g) => [g.label, g.items.length]), [['Sequel', 1], ['Side stories', 2]]);
-  assert.equal(groups[0].items[0].path, '/anime/anilist-182255');
+  assert.equal(groups[0].items[0].path, '/anime/182255-frieren-beyond-journeys-end-season-2');
   assert.equal(groups[1].items[0].path, null, 'not in the catalogue, so not a link');
 });
 

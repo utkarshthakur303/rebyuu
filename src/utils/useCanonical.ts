@@ -6,7 +6,7 @@ export const SITE_ORIGIN = 'https://www.rebyuu.app';
 /**
  * Maintains a single <link rel="canonical"> for the mounted route.
  *
- * `path` must be a root-relative path ("/browse", "/anime/anilist-21"); it is
+ * `path` must be a root-relative path ("/browse", "/anime/21-one-piece"); it is
  * resolved against SITE_ORIGIN so the tag is always absolute, which is what
  * Google expects and what makes it survive being read on a staging host.
  *

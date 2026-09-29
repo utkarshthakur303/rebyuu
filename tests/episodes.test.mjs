@@ -21,7 +21,7 @@ test('an airing show with no announced count has pages up to its next episode', 
 });
 
 test('episode pages live under their title page', () => {
-  assert.equal(episodePath(series, 3), '/anime/anilist-1/episode/3');
+  assert.equal(episodePath(series, 3), '/anime/1-target-show/episode/3');
 });
 
 test('an episode is indexable once it has a comment, or enough ratings', () => {

@@ -1,7 +1,7 @@
 import { SHELL } from './_shell.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
-import { animePath } from './_paths.js';
+import { animePath, parseAnimeRef } from './_paths.js';
 import {
   lastEpisode, episodePath, episodeActivity, isEpisodeIndexable, indexableEpisodes,
   episodeTitleTag, episodeDescription, MIN_EPISODE_RATINGS,
@@ -89,7 +89,7 @@ const ANILIST_TIMEOUT_MS = 2500;
  * get the page's head and heading without the live title lists, rather than
  * waiting on AniList for links no crawler should be collecting from them.
  */
-const INTERNAL_PARAMS = new Set(['route', 'id', 'ep']);
+const INTERNAL_PARAMS = new Set(['route', 'id', 'ref', 'ep']);
 const isVariant = (url) => [...url.searchParams.keys()].some((k) => !INTERNAL_PARAMS.has(k));
 
 const escapeHtml = (s) =>
@@ -326,6 +326,26 @@ function injectHead(html, { title, description, canonical, image, ld, robots }) 
 /** Injected into #root. React clears this on mount. */
 function injectBody(html, content) {
   return html.replace('<div id="root"></div>', `<div id="root">${content}</div>`);
+}
+
+/**
+ * The title reference the request was made with: `ref` from the canonical
+ * route (/anime/154587-frieren-…), or `id` from the original one
+ * (/anime/anilist-154587). Compared against the canonical path to decide
+ * whether to redirect.
+ */
+const requestedRef = (url) => url.searchParams.get('ref') ?? url.searchParams.get('id') ?? '';
+
+/**
+ * 301 to the canonical URL of a title or episode page. Any older or shorter
+ * form — the original anilist- URLs, a bare id, a slug from before a title
+ * was renamed — lands here, so links to it keep working and pass their
+ * weight to the one URL that is indexed.
+ */
+function redirect(res, path) {
+  res.setHeader('Location', `${ORIGIN}${path}`);
+  res.setHeader('Cache-Control', 'public, s-maxage=86400, stale-while-revalidate=604800');
+  res.status(301).send('');
 }
 
 function send(res, status, html) {
@@ -817,8 +837,9 @@ export default async function handler(req, res) {
     const route = url.searchParams.get('route');
 
     if (route === 'anime') {
-      const id = url.searchParams.get('id') || '';
-      if (!/^anilist-\d+$/.test(id)) return send(res, 404, renderMissing());
+      const requested = requestedRef(url);
+      const id = parseAnimeRef(requested)?.id;
+      if (!id) return send(res, 404, renderMissing());
 
       const [rows, ratings, posts] = await Promise.all([
         sb(`anime_index?id=eq.${encodeURIComponent(id)}&select=*&limit=1`),
@@ -838,6 +859,9 @@ export default async function handler(req, res) {
       }
 
       const row = rows[0];
+      const canonical = animePath(row);
+      if (`/anime/${requested}` !== canonical) return redirect(res, canonical);
+
       const relationIds = (Array.isArray(row.relations) ? row.relations : []).map((r) => r.id);
       const reviewPosts = Array.isArray(posts) ? posts : [];
       const [related, known, activity, authors] = await Promise.all([
@@ -858,9 +882,10 @@ export default async function handler(req, res) {
     }
 
     if (route === 'episode') {
-      const id = url.searchParams.get('id') || '';
+      const requested = requestedRef(url);
+      const id = parseAnimeRef(requested)?.id;
       const ep = url.searchParams.get('ep') || '';
-      if (!/^anilist-\d+$/.test(id) || !/^\d+$/.test(ep)) return send(res, 404, renderMissing());
+      if (!id || !/^\d+$/.test(ep)) return send(res, 404, renderMissing());
       const n = Number(ep);
       const key = encodeURIComponent(id);
       const [rows, ratings, comments, thread] = await Promise.all([
@@ -873,6 +898,8 @@ export default async function handler(req, res) {
       const row = Array.isArray(rows) ? rows[0] : null;
       const last = row ? lastEpisode(row) : null;
       if (!row || !last || n < 1 || n > last) return send(res, 404, renderMissing());
+      const canonical = episodePath(row, n);
+      if (`/anime/${requested}/episode/${n}` !== canonical) return redirect(res, canonical);
 
       const posts = Array.isArray(thread) ? thread : [];
       const authors = await loadUsernames(posts.map((c) => c.user_id));

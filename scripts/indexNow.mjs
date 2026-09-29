@@ -84,11 +84,12 @@ export function planWrite(existing, incoming, { now = new Date(), columns = SYNC
 }
 
 /**
- * Submits the title pages for `ids`. Never throws: a failed ping must not
- * fail the sync that has already written the catalogue.
+ * Submits `paths` — root-relative page paths, built with api/_paths.js so they
+ * are the canonical URLs. Never throws: a failed ping must not fail the sync
+ * that has already written the catalogue.
  */
-export async function submitToIndexNow(ids, { fetchImpl = fetch, log = console.log } = {}) {
-  const urls = ids.map((id) => `https://${HOST}/anime/${id}`);
+export async function submitToIndexNow(paths, { fetchImpl = fetch, log = console.log } = {}) {
+  const urls = paths.map((path) => `https://${HOST}${path}`);
   for (let i = 0; i < urls.length; i += MAX_URLS_PER_REQUEST) {
     const urlList = urls.slice(i, i + MAX_URLS_PER_REQUEST);
     try {

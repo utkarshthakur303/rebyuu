@@ -144,10 +144,10 @@ test('the episode sitemap lists discussed or rated episodes, and airing shows\' 
 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(episodeLocs(res.body).sort(), [
-    '/anime/anilist-1/episode/3',
-    '/anime/anilist-1/episode/7',
-    '/anime/anilist-2/episode/4',
-    '/anime/anilist-2/episode/5',
+    '/anime/1-show-1/episode/3',
+    '/anime/1-show-1/episode/7',
+    '/anime/2-show-2/episode/4',
+    '/anime/2-show-2/episode/5',
   ]);
 });
 
@@ -157,5 +157,5 @@ test('before the migration, the episode sitemap still lists discussed episodes',
   const res = await get('kind=episodes');
 
   assert.equal(res.statusCode, 200);
-  assert.deepEqual(episodeLocs(res.body).sort(), ['/anime/anilist-1/episode/3', '/anime/anilist-1/episode/7']);
+  assert.deepEqual(episodeLocs(res.body).sort(), ['/anime/1-show-1/episode/3', '/anime/1-show-1/episode/7']);
 });

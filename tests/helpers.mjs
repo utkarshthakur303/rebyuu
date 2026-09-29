@@ -247,9 +247,9 @@ export function rootOf(html) {
   return html.slice(start, end);
 }
 
-/** hrefs of every /anime/ link inside `html`, in document order. */
+/** Title-page links inside `html`, as anime_index ids, in document order. */
 export function animeLinks(html) {
-  return [...html.matchAll(/href="\/anime\/(anilist-\d+)"/g)].map((m) => m[1]);
+  return [...html.matchAll(/href="\/anime\/(\d+)(?:-[a-z0-9-]*)?"/g)].map((m) => `anilist-${m[1]}`);
 }
 
 /** The slice of `html` from the heading containing `label` to the next <h2>. */

@@ -86,10 +86,10 @@ function recorder(status = 200) {
   return { calls, fetchImpl };
 }
 
-test('changed titles are submitted as their page URLs with the site key', async () => {
+test('changed titles are submitted as their canonical page URLs with the site key', async () => {
   const { calls, fetchImpl } = recorder();
 
-  await submitToIndexNow(['anilist-1', 'anilist-2'], { fetchImpl, log: () => {} });
+  await submitToIndexNow(['/anime/1-cowboy-bebop', '/anime/2-show'], { fetchImpl, log: () => {} });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://api.indexnow.org/indexnow');
@@ -98,7 +98,7 @@ test('changed titles are submitted as their page URLs with the site key', async 
     host: 'www.rebyuu.app',
     key: INDEXNOW_KEY,
     keyLocation: `https://www.rebyuu.app/${INDEXNOW_KEY}.txt`,
-    urlList: ['https://www.rebyuu.app/anime/anilist-1', 'https://www.rebyuu.app/anime/anilist-2'],
+    urlList: ['https://www.rebyuu.app/anime/1-cowboy-bebop', 'https://www.rebyuu.app/anime/2-show'],
   });
 });
 
@@ -112,9 +112,9 @@ test('nothing is sent when nothing changed', async () => {
 
 test('more than 10,000 URLs are split across requests', async () => {
   const { calls, fetchImpl } = recorder();
-  const ids = Array.from({ length: 10_001 }, (_, i) => `anilist-${i + 1}`);
+  const paths = Array.from({ length: 10_001 }, (_, i) => `/anime/${i + 1}`);
 
-  await submitToIndexNow(ids, { fetchImpl, log: () => {} });
+  await submitToIndexNow(paths, { fetchImpl, log: () => {} });
 
   assert.deepEqual(calls.map((c) => c.body.urlList.length), [10_000, 1]);
 });
@@ -123,8 +123,8 @@ test('a rejected or failed submission is logged, never thrown', async () => {
   const lines = [];
   const failing = async () => { throw new Error('network down'); };
 
-  await submitToIndexNow(['anilist-1'], { fetchImpl: recorder(403).fetchImpl, log: (l) => lines.push(l) });
-  await submitToIndexNow(['anilist-1'], { fetchImpl: failing, log: (l) => lines.push(l) });
+  await submitToIndexNow(['/anime/1'], { fetchImpl: recorder(403).fetchImpl, log: (l) => lines.push(l) });
+  await submitToIndexNow(['/anime/1'], { fetchImpl: failing, log: (l) => lines.push(l) });
 
   assert.equal(lines.length, 2);
   assert.match(lines[0], /403/);

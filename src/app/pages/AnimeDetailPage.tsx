@@ -1,4 +1,4 @@
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -13,12 +13,15 @@ import { useNoIndex } from '@/utils/useNoIndex';
 import { useAnimeTitle } from '@/context/TitleLangContext';
 import { useSeo } from '@/utils/useSeo';
 import { titleTag, metaDescription, otherNames, nameLang } from '../../../api/_titlepage.js';
-import { animePath } from '../../../api/_paths.js';
+import { animePath, parseAnimeRef } from '../../../api/_paths.js';
 import { lastEpisode, episodePath, isEpisodeIndexable } from '../../../api/_episodes.js';
 import { nextEpisode } from '../../../api/_titlepage.js';
 
 export default function AnimeDetailPage() {
-  const { id } = useParams();
+  // The URL carries "154587-frieren-…" (or an older form); the row id is anilist-154587.
+  const { id: ref = '' } = useParams();
+  const id = parseAnimeRef(ref)?.id ?? '';
+  const location = useLocation();
   const { user } = useAuth();
   const [anime, setAnime] = useState<Anime | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
@@ -43,6 +46,15 @@ export default function AnimeDetailPage() {
    * this fetch can. Mark those noindex so they do not accumulate as soft 404s.
    */
   useNoIndex(!loading && !anime);
+
+  /* Any other form of this title's URL — the original anilist- one, a bare
+     id, a slug from before a rename — is replaced in the address bar with the
+     canonical path, as the server answers it with a 301 on a direct visit. */
+  useEffect(() => {
+    if (anime && anime.id === id && location.pathname !== animePath(anime)) {
+      navigate(animePath(anime) + location.search + location.hash, { replace: true });
+    }
+  }, [anime, id, location.pathname, location.search, location.hash, navigate]);
 
   /* The same title and description the prerender serves, so a visit that
      arrives by client-side navigation gets them too. */
@@ -611,7 +623,7 @@ export default function AnimeDetailPage() {
                 <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
                   <Link
                     to="/login"
-                    state={{ from: `/anime/${id}` }}
+                    state={{ from: location.pathname }}
                     className="underline underline-offset-2 hover:text-orange"
                   >
                     Sign in

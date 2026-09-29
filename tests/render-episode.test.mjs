@@ -24,32 +24,32 @@ const robotsOf = (body) => body.match(/<meta name="robots" content="([^"]*)"/)?.
 test('an episode page has its own title, canonical, heading and a link back to the show', async () => {
   installFetch({ tables: tables() });
 
-  const res = await render(handler, 'route=episode&id=anilist-1&ep=3');
+  const res = await render(handler, 'route=episode&ref=1-target-show&ep=3');
 
   assert.equal(res.statusCode, 200);
   assert.match(res.body, /<title>Target Show Episode 3 — Rating &amp; Discussion · Rebyuu<\/title>/);
-  assert.match(res.body, /<link rel="canonical" href="https:\/\/www.rebyuu.app\/anime\/anilist-1\/episode\/3" \/>/);
+  assert.match(res.body, /<link rel="canonical" href="https:\/\/www.rebyuu.app\/anime\/1-target-show\/episode\/3" \/>/);
   assert.match(rootOf(res.body), /<h1[^>]*>Target Show — Episode 3<\/h1>/);
-  assert.match(rootOf(res.body), /<a href="\/anime\/anilist-1">Target Show<\/a>/);
+  assert.match(rootOf(res.body), /<a href="\/anime\/1-target-show">Target Show<\/a>/);
 });
 
 test('an episode page is marked up as a TVEpisode of its series', async () => {
   installFetch({ tables: tables() });
 
-  const [episode, crumbs] = ldOf((await render(handler, 'route=episode&id=anilist-1&ep=3')).body);
+  const [episode, crumbs] = ldOf((await render(handler, 'route=episode&ref=1-target-show&ep=3')).body);
 
   assert.equal(episode['@type'], 'TVEpisode');
   assert.equal(episode.episodeNumber, 3);
-  assert.deepEqual(episode.partOfSeries, { '@type': 'TVSeries', '@id': 'https://www.rebyuu.app/anime/anilist-1#work', name: 'Target Show', url: 'https://www.rebyuu.app/anime/anilist-1' });
+  assert.deepEqual(episode.partOfSeries, { '@type': 'TVSeries', '@id': 'https://www.rebyuu.app/anime/1-target-show#work', name: 'Target Show', url: 'https://www.rebyuu.app/anime/1-target-show' });
   assert.equal(crumbs.itemListElement.length, 4);
 });
 
 test('an episode with nothing on it is served noindex, and becomes indexable with a comment', async () => {
   installFetch({ tables: tables() });
-  assert.equal(robotsOf((await render(handler, 'route=episode&id=anilist-1&ep=3')).body), 'noindex, follow');
+  assert.equal(robotsOf((await render(handler, 'route=episode&ref=1-target-show&ep=3')).body), 'noindex, follow');
 
   installFetch({ tables: tables({ episode_comments: [{ id: 'c1', anime_id: 'anilist-1', episode_number: 3, user_id: 'u1', content: 'That ending!', created_at: '2026-09-01T10:00:00Z' }] }) });
-  assert.equal(robotsOf((await render(handler, 'route=episode&id=anilist-1&ep=3')).body), 'max-image-preview:large');
+  assert.equal(robotsOf((await render(handler, 'route=episode&ref=1-target-show&ep=3')).body), 'max-image-preview:large');
 });
 
 test('comments are served with their author and escaped', async () => {
@@ -62,7 +62,7 @@ test('comments are served with their author and escaped', async () => {
     }),
   });
 
-  const discussion = section(rootOf((await render(handler, 'route=episode&id=anilist-1&ep=3')).body), 'Discussion');
+  const discussion = section(rootOf((await render(handler, 'route=episode&ref=1-target-show&ep=3')).body), 'Discussion');
 
   assert.match(discussion, /kaori[\s\S]*Best &lt;b&gt;episode&lt;\/b&gt; so far[\s\S]*arima[\s\S]*Agreed/);
 });
@@ -71,7 +71,7 @@ test('the Rebyuu rating is shown and marked up once three people have rated the 
   const ratings = [7, 8, 10].map((rating, i) => ({ id: `r${i}`, anime_id: 'anilist-1', episode_number: 3, user_id: `u${i}`, rating }));
   installFetch({ tables: tables({ episode_ratings: ratings }) });
 
-  const { body } = await render(handler, 'route=episode&id=anilist-1&ep=3');
+  const { body } = await render(handler, 'route=episode&ref=1-target-show&ep=3');
 
   assert.match(rootOf(body), /8\.3\/10 from 3 ratings/);
   assert.deepEqual(ldOf(body)[0].aggregateRating, { '@type': 'AggregateRating', ratingValue: 8.3, ratingCount: 3, bestRating: 10, worstRating: 1 });
@@ -80,7 +80,7 @@ test('the Rebyuu rating is shown and marked up once three people have rated the 
 test('the next scheduled episode says when it airs, and is indexable', async () => {
   installFetch({ tables: tables() });
 
-  const { body } = await render(handler, 'route=episode&id=anilist-2&ep=5');
+  const { body } = await render(handler, 'route=episode&ref=2-airing-show&ep=5');
 
   assert.match(body, /<title>Airing Show Episode 5: Release Date &amp; Time · Rebyuu<\/title>/);
   assert.match(rootOf(body), /airs on <time datetime="2099-01-02T15:00:00.000Z">Friday 2 January 2099, 15:00 UTC<\/time>/);
@@ -90,17 +90,27 @@ test('the next scheduled episode says when it airs, and is indexable', async () 
 test('previous and next episodes are linked only where indexable', async () => {
   installFetch({ tables: tables() });
 
-  const root = rootOf((await render(handler, 'route=episode&id=anilist-2&ep=4')).body);
+  const root = rootOf((await render(handler, 'route=episode&ref=2-airing-show&ep=4')).body);
 
-  assert.match(root, /<a href="\/anime\/anilist-2\/episode\/5"[^>]*>Episode 5 →<\/a>/);
-  assert.doesNotMatch(root, /href="\/anime\/anilist-2\/episode\/3"/, 'episode 3 is noindex, so no crawlable link');
+  assert.match(root, /<a href="\/anime\/2-airing-show\/episode\/5"[^>]*>Episode 5 →<\/a>/);
+  assert.doesNotMatch(root, /href="\/anime\/2-airing-show\/episode\/3"/, 'episode 3 is noindex, so no crawlable link');
 });
 
 test('episode numbers outside the show, and films, are real 404s', async () => {
   installFetch({ tables: tables() });
 
-  for (const q of ['route=episode&id=anilist-1&ep=13', 'route=episode&id=anilist-1&ep=0', 'route=episode&id=anilist-1&ep=x', 'route=episode&id=anilist-3&ep=1', 'route=episode&id=anilist-999&ep=1']) {
+  for (const q of ['route=episode&ref=1-target-show&ep=13', 'route=episode&ref=1-target-show&ep=0', 'route=episode&ref=1-target-show&ep=x', 'route=episode&ref=3-a-film&ep=1', 'route=episode&ref=999&ep=1']) {
     assert.equal((await render(handler, q)).statusCode, 404, q);
+  }
+});
+
+test('an episode URL in an older form redirects to the canonical one', async () => {
+  installFetch({ tables: tables() });
+
+  for (const q of ['route=episode&id=anilist-1&ep=3', 'route=episode&ref=1&ep=3', 'route=episode&ref=1-old&ep=3']) {
+    const res = await render(handler, q);
+    assert.equal(res.statusCode, 301, q);
+    assert.equal(res.headers.location, 'https://www.rebyuu.app/anime/1-target-show/episode/3', q);
   }
 });
 
@@ -109,7 +119,7 @@ test('the title page lists its indexable episodes as links, and only those', asy
     tables: tables({ episode_comments: [{ id: 'c1', anime_id: 'anilist-2', episode_number: 2, user_id: 'u1', content: 'x', created_at: '2026-09-01T10:00:00Z' }] }),
   });
 
-  const guide = section(rootOf((await render(handler, 'route=anime&id=anilist-2')).body), 'Airing Show episodes');
+  const guide = section(rootOf((await render(handler, 'route=anime&ref=2-airing-show')).body), 'Airing Show episodes');
 
-  assert.deepEqual([...guide.matchAll(/href="\/anime\/anilist-2\/episode\/(\d+)"/g)].map((m) => Number(m[1])), [2, 4, 5]);
+  assert.deepEqual([...guide.matchAll(/href="\/anime\/2-airing-show\/episode\/(\d+)"/g)].map((m) => Number(m[1])), [2, 4, 5]);
 });

@@ -4,6 +4,7 @@ import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
 import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
 import { toRow, DETAIL_COLUMNS } from './animeRow.mjs';
+import { animePath } from '../api/_paths.js';
 const ANILIST_API = 'https://graphql.anilist.co';
 
 // The detail fields (names, studio, streaming links, next episode, relations)
@@ -155,7 +156,7 @@ async function fetchAniListPage(
   throw new Error('AniList rate limit not cleared after 5 attempts');
 }
 
-/** Upserts one page of titles. Returns the ids whose stored row it actually changed. */
+/** Upserts one page of titles. Returns the page paths of the titles it actually changed. */
 async function syncAnimeToSupabase(
   supabase: ReturnType<typeof createClient>,
   media: AniListMedia[],
@@ -184,7 +185,7 @@ async function syncAnimeToSupabase(
     }
   }
 
-  return changed;
+  return animeData.filter((row) => changed.includes(row.id)).map((row) => animePath(row));
 }
 
 interface Pass {
@@ -228,7 +229,7 @@ async function runPass(
       const { data, hasNextPage } = await fetchAniListPage(page, 50, pass.sort, pass.status);
       if (!data.length) break;
 
-      for (const id of await syncAnimeToSupabase(supabase, data, schema)) changed.add(id);
+      for (const path of await syncAnimeToSupabase(supabase, data, schema)) changed.add(path);
       synced += data.length;
       console.log(`  page ${page}: +${data.length} (pass total ${synced})`);
 
