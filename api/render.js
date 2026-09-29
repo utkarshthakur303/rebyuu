@@ -1,8 +1,9 @@
 import { SHELL } from './_shell.js';
 import { ORIGIN, escapeHtml, stripTags, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
 import { sb, anilist, rankedIds, rowsById } from './_upstream.js';
-import { parseHubPath, hubPath } from './_hubs.js';
-import { loadHub, renderHub, HubDataError } from './_hubpage.js';
+import { parseHubPath, hubPath, hubNavLinks } from './_hubs.js';
+import { loadHub, renderHub, HubDataError, LIST_COLUMNS, bootItem } from './_hubpage.js';
+import { EXCLUDED_GENRES } from './_catalog.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath, parseAnimeRef } from './_paths.js';
@@ -117,19 +118,22 @@ async function loadEpisodeActivity(id) {
  * EXCLUDED_GENRES does there. Unlike the React page, which renders AniList's
  * own records, ids missing from anime_index are dropped here — a served link
  * to one of those would be a link to a 404. Falls back to the archive ordered
- * by stored rating, as fetchArchiveBrowsePage does.
+ * by stored rating, as fetchArchiveBrowsePage does. `live` says which it is:
+ * only the live list is the one React would show, and so handed to it.
  */
 async function loadBrowseFirstPage() {
   const ranked = await anilist(`query {
-  browse: Page(page: 1, perPage: ${BROWSE_PAGE_SIZE}) { media(type: ANIME, sort: [TRENDING_DESC], genre_not_in: ["Hentai"], isAdult: false) { id } }
+  browse: Page(page: 1, perPage: ${BROWSE_PAGE_SIZE}) { media(type: ANIME, sort: [TRENDING_DESC], genre_not_in: ${JSON.stringify(EXCLUDED_GENRES)}, isAdult: false) { id } }
 }`);
   const ids = rankedIds(ranked?.browse);
-  const byId = await rowsById(ids);
+  const byId = await rowsById(ids, LIST_COLUMNS);
   const items = ids.map((id) => byId.get(id)).filter(Boolean);
-  if (items.length) return items;
+  if (items.length) return { items, live: true };
 
-  const fallback = await sb(`anime_index?select=id,title,year&order=rating.desc.nullslast&limit=${BROWSE_PAGE_SIZE}`);
-  return Array.isArray(fallback) ? fallback : [];
+  const fallback = await sb(
+    `anime_index?select=${LIST_COLUMNS}&genres=not.ov.{${EXCLUDED_GENRES.join(',')}}&order=rating.desc.nullslast,id.asc&limit=${BROWSE_PAGE_SIZE}`
+  );
+  return { items: Array.isArray(fallback) ? fallback : [], live: false };
 }
 
 /**
@@ -263,6 +267,7 @@ function renderHome(rails = []) {
         <a href="/browse">Browse the catalogue</a> · <a href="/about">About Rebyuu and its sources</a>
       </p>
       ${rails.map(renderTitleList).join('')}
+      ${renderHubLinks()}
     </main>`;
 
   let html = injectHead(SHELL, {
@@ -401,7 +406,7 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
       ${year ? `<div><dt style="display:inline;font-weight:600">Year: </dt><dd style="display:inline;margin:0">${escapeHtml(year)}</dd></div>` : ''}
       <div><dt style="display:inline;font-weight:600">Status: </dt><dd style="display:inline;margin:0">${escapeHtml(statusWord)}</dd></div>
       ${row.episodes ? `<div><dt style="display:inline;font-weight:600">Episodes: </dt><dd style="display:inline;margin:0">${escapeHtml(String(row.episodes))}</dd></div>` : ''}
-      ${titleFacts(row).map((f) => `<div><dt style="display:inline;font-weight:600">${escapeHtml(f.label)}: </dt><dd style="display:inline;margin:0">${escapeHtml(f.value)}</dd></div>`).join('\n      ')}
+      ${titleFacts(row).map((f) => `<div><dt style="display:inline;font-weight:600">${escapeHtml(f.label)}: </dt><dd style="display:inline;margin:0">${f.path ? `<a href="${escapeHtml(f.path)}">${escapeHtml(f.value)}</a>` : escapeHtml(f.value)}</dd></div>`).join('\n      ')}
       ${genres.length ? `<div><dt style="display:inline;font-weight:600">Genres: </dt><dd style="display:inline;margin:0">${escapeHtml(genres.join(', '))}</dd></div>` : ''}
       ${row.rating != null ? `<div><dt style="display:inline;font-weight:600">AniList score: </dt><dd style="display:inline;margin:0">${escapeHtml(Number(row.rating).toFixed(1))}/10</dd></div>` : ''}
       ${community && community.count >= MIN_RATINGS_FOR_SCORE
@@ -456,13 +461,14 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
  * correct for them: they canonicalise to /browse and robots.txt keeps
  * crawlers out of them. React renders the filtered grid on mount.
  */
-function renderBrowse(items) {
+function renderBrowse({ items, live }) {
   const meta = PAGES.browse;
   const content = `
     <main class="mx-auto max-w-3xl px-4 py-16">
       <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,44px);line-height:1">${escapeHtml(meta.heading)}</h1>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:17px;line-height:1.7;margin-top:14px">${escapeHtml(meta.description)}</p>
       ${renderTitleList({ heading: 'Trending now', items })}
+      ${renderHubLinks()}
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:24px"><a href="/">Home</a> · <a href="/about">About Rebyuu and its sources</a></p>
     </main>`;
 
@@ -472,8 +478,20 @@ function renderBrowse(items) {
       description: meta.description,
       canonical: `${ORIGIN}${meta.path}`,
     }),
-    content
+    content,
+    // The unfiltered trending list is the one React's /browse opens on, so it
+    // is handed over (readBootList); trending always has another page.
+    live && items.length ? { list: { path: meta.path, items: items.map(bootItem), hasMore: true, live: true } } : null
   );
+}
+
+/** The hub pages every served page links: this season, next season, airing, upcoming. */
+function renderHubLinks(now = new Date()) {
+  return `
+      <section style="margin-top:36px">
+        <h2 style="font-family:Anton,Impact,sans-serif;font-size:26px;line-height:1.1">Seasons and charts</h2>
+        <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:10px">${hubNavLinks(now).map((l) => `<a href="${escapeHtml(l.path)}">${escapeHtml(l.label)}</a>`).join(' · ')}</p>
+      </section>`;
 }
 
 /**
@@ -827,7 +845,7 @@ export default async function handler(req, res) {
     }
 
     const variant = isVariant(url);
-    if (route === 'browse') return send(res, 200, renderBrowse(variant ? [] : await loadBrowseFirstPage()));
+    if (route === 'browse') return send(res, 200, renderBrowse(variant ? { items: [], live: false } : await loadBrowseFirstPage()));
     if (PROSE_ROUTES.includes(route)) return send(res, 200, renderProse(PAGES[route]));
 
     return send(res, 200, renderHome(variant ? [] : await loadHomeRails()));

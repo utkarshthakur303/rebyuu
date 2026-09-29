@@ -104,7 +104,8 @@ test('with AniList down, the season comes from the catalogue, best rated first',
 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(animeLinks(rootOf(res.body)), ['anilist-2', 'anilist-1']);
-  assert.equal(bootOf(res.body).list.live, false);
+  // React is not handed a list in a different order than it would show: it fetches its own.
+  assert.equal(bootOf(res.body).list.items, null);
 });
 
 test('a database outage is a 503 that still carries the app, so visitors get the page', async () => {

@@ -151,7 +151,8 @@ export function renderHub(hub, data, now = new Date()) {
   return injectBody(html, content, {
     list: {
       path,
-      items: items.slice(0, HUB_PAGE_SIZE).map(bootItem),
+      // Only AniList's ranking is the list React would show; without it, React fetches its own.
+      items: data.live ? items.slice(0, HUB_PAGE_SIZE).map(bootItem) : null,
       hasMore: data.hasMore,
       live: data.live,
       indexable,

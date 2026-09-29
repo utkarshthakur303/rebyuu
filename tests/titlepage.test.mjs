@@ -137,10 +137,21 @@ const detailed = {
 
 const airing = { ...detailed, status: 'airing', episodes: 12, next_episode: 5, next_episode_at: '2026-10-03T15:00:00+00:00' };
 
+test("the season fact names the season AniList files a title under, and links its page", () => {
+  // A December 2023 premiere.
+  const facts = titleFacts({ season: 'Winter', year: 2023, season_year: 2024 });
+  assert.deepEqual(facts.find((f) => f.label === 'Season'), { label: 'Season', value: 'Winter 2024', path: '/seasons/winter-2024' });
+});
+
+test('a season too far ahead to have a page is named but not linked', () => {
+  const facts = titleFacts({ season: 'Fall', year: new Date().getUTCFullYear() + 5 });
+  assert.equal(facts.find((f) => f.label === 'Season').path, undefined);
+});
+
 test('extra facts: format, season, studio, source and episode length, when known', () => {
   assert.deepEqual(titleFacts(detailed), [
     { label: 'Format', value: 'TV series' },
-    { label: 'Season', value: 'Fall 2023' },
+    { label: 'Season', value: 'Fall 2023', path: '/seasons/fall-2023' },
     { label: 'Studio', value: 'MADHOUSE' },
     { label: 'Source', value: 'Manga' },
     { label: 'Episode length', value: '24 min' },
