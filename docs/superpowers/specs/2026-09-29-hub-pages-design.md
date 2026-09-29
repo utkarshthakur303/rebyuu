@@ -228,10 +228,16 @@ New route `hub`, reached through `vercel.json` rewrites for each URL shape.
    The fix: a new nullable column `season_year` (migration
    `supabase/season_year_migration.sql`), filled from AniList's
    `seasonYear`. Wherever `season_year` is still empty the code uses `year`.
-   The column is added to the sync's detail columns, so before the
-   migration runs the sync behaves as it did before the first migration.
+   The sync checks for this column on its own, so if it runs before the
+   migration it keeps writing every other column and only skips this one.
    `year` keeps meaning the start year everywhere else, which is also what
    Browse's year filter and the year pages use.
+3. **One copy of the catalogue vocabulary.** The genre list, the season
+   names and the excluded genres move to one shared module
+   (`api/_catalog.js`), used by the prerender, the sync and React. This
+   removes two existing duplicates: `EXCLUDED_GENRES` is defined in both
+   `api/_related.js` and `src/services/anime.ts`, and `src/data/animeData.ts`,
+   which nothing imports, repeats the genre and season lists.
 
 ## Edge cases and how each is handled
 
