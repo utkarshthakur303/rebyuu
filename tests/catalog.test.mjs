@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { GENRES, SEASONS, EXCLUDED_GENRES, seasonYearOf, seasonFromAniList } from '../api/_catalog.js';
+import { GENRES, SEASONS, EXCLUDED_GENRES, seasonYearOf, seasonFromAniList, genreSlug, genreFromSlug } from '../api/_catalog.js';
 
 test('the genre vocabulary is the 18 Browse genres, without the excluded ones', () => {
   assert.equal(GENRES.length, 18);
@@ -25,4 +25,15 @@ test("a title's season year is AniList's once synced, and its start year until t
   assert.equal(seasonYearOf({ year: 2023, season_year: null }), 2023);
   assert.equal(seasonYearOf({ year: 2023 }), 2023);
   assert.equal(seasonYearOf({ year: null }), null);
+});
+
+test('each genre has a URL slug, read back case-insensitively', () => {
+  assert.equal(genreSlug('Slice of Life'), 'slice-of-life');
+  assert.equal(genreSlug('Sci-Fi'), 'sci-fi');
+  assert.equal(genreSlug('Mahou Shoujo'), 'mahou-shoujo');
+  assert.equal(genreFromSlug('slice-of-life'), 'Slice of Life');
+  assert.equal(genreFromSlug('Sci-Fi'), 'Sci-Fi');
+  assert.equal(genreFromSlug('hentai'), null);
+  assert.equal(genreFromSlug('isekai'), null);
+  assert.equal(new Set(GENRES.map(genreSlug)).size, GENRES.length);
 });

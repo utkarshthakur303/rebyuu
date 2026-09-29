@@ -1,4 +1,4 @@
-import { SEASONS } from './_catalog.js';
+import { SEASONS, genreSlug, genreFromSlug } from './_catalog.js';
 
 /**
  * Hub pages: a few Browse views with an address of their own, so the
@@ -8,6 +8,9 @@ import { SEASONS } from './_catalog.js';
  *   { kind: 'season', season: 'Fall', year: 2026 }   /seasons/fall-2026
  *   { kind: 'airing' }                               /airing
  *   { kind: 'upcoming' }                             /upcoming
+ *   { kind: 'top' }                                  /top
+ *   { kind: 'year', year: 2025 }                     /top/2025
+ *   { kind: 'genre', genre: 'Slice of Life' }        /genres/slice-of-life
  *
  * Every hub *is* the Browse page, opened on a preset (hubPreset). The
  * filtered /browse?… URLs stay out of search on purpose — ~296,000
@@ -28,9 +31,13 @@ const SEASON_ALIASES = { autumn: 'Fall' };
 
 export const seasonPath = ({ season, year }) => `/seasons/${season.toLowerCase()}-${year}`;
 
+export const genrePath = (genre) => `/genres/${genreSlug(genre)}`;
+
 export function hubPath(hub) {
   if (hub.kind === 'season') return seasonPath(hub);
-  if (hub.kind === 'airing' || hub.kind === 'upcoming') return `/${hub.kind}`;
+  if (hub.kind === 'airing' || hub.kind === 'upcoming' || hub.kind === 'top') return `/${hub.kind}`;
+  if (hub.kind === 'year') return `/top/${hub.year}`;
+  if (hub.kind === 'genre') return genrePath(hub.genre);
   throw new Error(`hubPath: unknown hub kind ${hub.kind}`);
 }
 
@@ -43,6 +50,18 @@ export function parseHubPath(pathname, now = new Date()) {
   const path = String(pathname ?? '');
   if (path === '/airing') return { kind: 'airing' };
   if (path === '/upcoming') return { kind: 'upcoming' };
+  if (path === '/top') return { kind: 'top' };
+  const top = /^\/top\/(\d{4})$/.exec(path);
+  if (top) {
+    // "Best of" a year that hasn't happened has nothing to rank.
+    const year = Number(top[1]);
+    return year >= FIRST_YEAR && year <= now.getUTCFullYear() ? { kind: 'year', year } : null;
+  }
+  const genre = /^\/genres\/([a-z0-9-]+)$/i.exec(path);
+  if (genre) {
+    const name = genreFromSlug(genre[1]);
+    return name ? { kind: 'genre', genre: name } : null;
+  }
   const match = /^\/seasons\/([a-z]+)-(\d{4})$/i.exec(path);
   if (!match) return null;
   const word = match[1].toLowerCase();
@@ -78,7 +97,8 @@ const NO_FILTERS = { genres: [], year: null, season: null, status: 'all', query:
  * The Browse view a hub is: its filters, in Browse's state shape, and the
  * order it opens in. Airing and Upcoming open in the order of the homepage
  * rails whose "View More" leads to them, so the list continues rather than
- * reshuffles.
+ * reshuffles. Genres open most popular first: by score, Comedy, Action and
+ * Sci-Fi each start with a run of Gintama seasons.
  */
 export function hubPreset(hub) {
   switch (hub.kind) {
@@ -88,6 +108,12 @@ export function hubPreset(hub) {
       return { filters: { ...NO_FILTERS, status: 'airing' }, sort: 'trending' };
     case 'upcoming':
       return { filters: { ...NO_FILTERS, status: 'upcoming' }, sort: 'popularity' };
+    case 'top':
+      return { filters: { ...NO_FILTERS }, sort: 'score' };
+    case 'year':
+      return { filters: { ...NO_FILTERS, year: hub.year }, sort: 'score' };
+    case 'genre':
+      return { filters: { ...NO_FILTERS, genres: [hub.genre] }, sort: 'popularity' };
     default:
       throw new Error(`hubPreset: unknown hub kind ${hub.kind}`);
   }
@@ -119,12 +145,14 @@ const sameFilters = (a, b) =>
  * Where a change made on a hub leads. A new order or page stays on the hub.
  * Any filter change opens Browse with the resulting filters, the order
  * spelled out when it isn't Browse's default — nothing reshuffles unless the
- * visitor asked it to. Moving between hubs is done with links, which are
- * also what search engines follow.
+ * visitor asked it to. On /top the order is what the page is, so a new one
+ * opens Browse too. Moving between hubs is done with links, which are also
+ * what search engines follow.
  */
 export function hubChangeTarget(hub, next, browseDefaultSort) {
   const preset = hubPreset(hub);
-  if (sameFilters(next, preset.filters)) {
+  const keepsIdentity = hub.kind !== 'top' || next.sort === preset.sort;
+  if (sameFilters(next, preset.filters) && keepsIdentity) {
     const params = new URLSearchParams();
     if (next.sort !== preset.sort) params.set('sort', next.sort);
     if (next.page > 1) params.set('page', String(next.page));
@@ -146,5 +174,6 @@ export function hubNavLinks(now = new Date()) {
     { label: `${next.season} ${next.year} anime`, path: seasonPath(next) },
     { label: 'Airing schedule', path: '/airing' },
     { label: 'Upcoming anime', path: '/upcoming' },
+    { label: 'Top rated anime', path: '/top' },
   ];
 }

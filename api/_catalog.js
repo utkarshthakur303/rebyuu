@@ -1,3 +1,5 @@
+import { slugify } from './_paths.js';
+
 /**
  * The catalogue's vocabulary: its genres, its seasons, and what is kept out.
  *
@@ -45,6 +47,15 @@ export const GENRES = [
  * rather than at sync time so the rule applies to rows already stored.
  */
 export const EXCLUDED_GENRES = ['Hentai'];
+
+/** A genre's URL segment: "Slice of Life" is "slice-of-life". */
+export const genreSlug = (genre) => slugify(genre);
+
+/** The genre a URL segment names, in any case; null for anything not in GENRES. */
+export const genreFromSlug = (slug) => {
+  const wanted = String(slug ?? '').toLowerCase();
+  return GENRES.find((genre) => genreSlug(genre) === wanted) ?? null;
+};
 
 /** In calendar order: Winter starts the year. */
 export const SEASONS = ['Winter', 'Spring', 'Summer', 'Fall'];

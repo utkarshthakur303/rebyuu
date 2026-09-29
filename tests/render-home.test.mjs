@@ -110,13 +110,13 @@ test('with Supabase down the homepage still renders its heading and description'
   assert.deepEqual(animeLinks(rootOf(res.body)), []);
 });
 
-test('the homepage links this season, next season, the airing schedule and upcoming, after its rails', async () => {
+test('the homepage links this season, next season, airing, upcoming and top rated, after its rails', async () => {
   installFetch({ tables: { anime_index: [], ratings: [] }, anilist: null });
 
   const root = rootOf((await render(handler, 'route=home')).body);
   const links = hubNavLinks(new Date());
 
-  assert.equal(links.length, 4);
+  assert.equal(links.length, 5);
   for (const { path, label } of links) assert.match(root, new RegExp(`<a href="${path}">${label}</a>`), path);
   assert.ok(root.indexOf('Seasons and charts') > root.lastIndexOf('Upcoming</h2>'));
 });
