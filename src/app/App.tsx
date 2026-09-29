@@ -87,6 +87,9 @@ export default function App() {
                 <Route path="/seasons/:key" element={null} />
                 <Route path="/airing" element={null} />
                 <Route path="/upcoming" element={null} />
+                <Route path="/top" element={null} />
+                <Route path="/top/:year" element={null} />
+                <Route path="/genres/:genre" element={null} />
               </Route>
               <Route path="/anime/:id" element={<ErrorBoundary><AnimeDetailPage /></ErrorBoundary>} />
               <Route path="/anime/:id/episode/:ep" element={<ErrorBoundary><EpisodePage /></ErrorBoundary>} />

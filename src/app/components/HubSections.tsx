@@ -53,21 +53,27 @@ export function useHubExtras(hub: Hub | null, boot: BootList | null): Extras {
   return extras.path === path ? extras : { path, links: null, schedule: null };
 }
 
+/** Links shown before "+N more": /top links 47 years, a genre its 17 fellow genres. */
+const LINKS_SHOWN = 12;
+
 export function HubIntro({ intro, linksLabel, links }: { intro: string; linksLabel: string | null; links: HubLink[] | null }) {
+  const [allLinks, setAllLinks] = useState(false);
+  const shown = links && !allLinks ? links.slice(0, LINKS_SHOWN) : links;
   return (
     <div className="mb-4 sm:mb-6 max-w-3xl">
       <p className="text-muted-foreground" style={{ ...outfit, fontSize: '15px', lineHeight: 1.6 }}>
         {intro}
       </p>
-      {links && links.length > 0 && (
-        // Scrolls sideways on its own rather than widening the page.
-        <nav aria-label={linksLabel ?? undefined} className="scroll-row mt-3 flex items-center gap-2 overflow-x-auto">
+      {shown && shown.length > 0 && (
+        // On a phone the row scrolls sideways rather than widening the page;
+        // wider screens, where a mouse can't swipe it, wrap it instead.
+        <nav aria-label={linksLabel ?? undefined} className="scroll-row mt-3 flex items-center gap-2 overflow-x-auto sm:flex-wrap sm:overflow-visible">
           {linksLabel && (
             <span className="shrink-0 text-[10px] font-semibold tracking-[0.15em] uppercase text-foreground/60" style={outfit}>
               {linksLabel}
             </span>
           )}
-          {links.map((link) => (
+          {shown.map((link) => (
             <Link
               key={link.path}
               to={link.path}
@@ -77,6 +83,15 @@ export function HubIntro({ intro, linksLabel, links }: { intro: string; linksLab
               {link.label}
             </Link>
           ))}
+          {links && links.length > shown.length && (
+            <button
+              onClick={() => setAllLinks(true)}
+              className="shrink-0 flex items-center min-h-[36px] rounded-md px-3 text-xs font-medium tracking-wider text-crimson hover:bg-accent"
+              style={outfit}
+            >
+              +{links.length - shown.length} more
+            </button>
+          )}
         </nav>
       )}
     </div>
