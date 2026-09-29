@@ -203,11 +203,12 @@ export default function BrowsePage() {
   }, [hub, listPath, pathname, search, navigate]);
 
   useEffect(() => {
-    // The served page already holds this exact view.
+    // The served page already holds this exact view; a not-found hub shows no grid.
     if (skipFirstFetch.current) {
       skipFirstFetch.current = false;
       return;
     }
+    if (missingHub) return;
     const requestId = ++requestRef.current;
     setLoading(true);
     setFailed(false);
@@ -258,6 +259,7 @@ export default function BrowsePage() {
     queryParam,
     page,
     pageSize,
+    missingHub,
     retryToken,
   ]);
 
