@@ -4,6 +4,7 @@ import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
 import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
 import { toRow, DETAIL_COLUMNS, SEASON_YEAR_COLUMNS } from './animeRow.mjs';
+import { recheckBatches, RECHECK_BATCH } from './recheck.mjs';
 import { animePath } from '../api/_paths.js';
 const ANILIST_API = 'https://graphql.anilist.co';
 
@@ -12,14 +13,14 @@ const ANILIST_API = 'https://graphql.anilist.co';
 // their columns has run. Measured on a live 50-title page: ~1.6 s, ~150-200 KB,
 // well inside AniList's complexity limit.
 const ANILIST_QUERY = `
-  query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus) {
+  query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $ids: [Int]) {
     Page(page: $page, perPage: $perPage) {
       pageInfo {
         total
         currentPage
         hasNextPage
       }
-      media(type: ANIME, sort: $sort, status: $status, isAdult: false) {
+      media(type: ANIME, sort: $sort, status: $status, id_in: $ids, isAdult: false) {
         id
         idMal
         title {
@@ -132,7 +133,8 @@ async function fetchAniListPage(
   page: number,
   perPage: number = 50,
   sort: AniListSort = 'POPULARITY_DESC',
-  status?: AniListStatus
+  status?: AniListStatus,
+  ids?: number[]
 ): Promise<{ data: AniListMedia[]; hasNextPage: boolean }> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const response = await fetch(ANILIST_API, {
@@ -143,7 +145,7 @@ async function fetchAniListPage(
       },
       body: JSON.stringify({
         query: ANILIST_QUERY,
-        variables: { page, perPage, sort: [sort], status }
+        variables: { page, perPage, sort: [sort], status, ids }
       })
     });
 
@@ -236,7 +238,8 @@ async function runPass(
   supabase: ReturnType<typeof createClient>,
   pass: Pass,
   schema: Schema,
-  changed: Set<string>
+  changed: Set<string>,
+  seen: Set<string>
 ): Promise<number> {
   console.log(`\n── pass: ${pass.label} (${pass.sort}${pass.status ? ' / ' + pass.status : ''}) ──`);
   let synced = 0;
@@ -246,6 +249,7 @@ async function runPass(
       const { data, hasNextPage } = await fetchAniListPage(page, 50, pass.sort, pass.status);
       if (!data.length) break;
 
+      for (const m of data) seen.add(`anilist-${m.id}`);
       for (const path of await syncAnimeToSupabase(supabase, data, schema)) changed.add(path);
       synced += data.length;
       console.log(`  page ${page}: +${data.length} (pass total ${synced})`);
@@ -260,6 +264,54 @@ async function runPass(
   }
 
   return synced;
+}
+
+/** Every stored row still marked airing or upcoming, a PostgREST page at a time. */
+async function storedLiveRows(supabase: ReturnType<typeof createClient>): Promise<{ id: string }[]> {
+  const rows: { id: string }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('anime_index')
+      .select('id')
+      .in('status', ['airing', 'upcoming'])
+      .order('id')
+      .range(from, from + 999);
+    if (error) throw new Error(`could not read airing and upcoming rows: ${error.message}`);
+    rows.push(...((data ?? []) as { id: string }[]));
+    if (!data || data.length < 1000) return rows;
+  }
+}
+
+/**
+ * Re-fetches, by id, the stored airing and upcoming titles the passes did
+ * not see — the shows that have since finished or started — so their status
+ * and episode data catch up (see recheck.mjs).
+ */
+async function recheckStale(
+  supabase: ReturnType<typeof createClient>,
+  schema: Schema,
+  seen: Set<string>,
+  changed: Set<string>
+): Promise<number> {
+  console.log('\n── recheck: airing and upcoming titles the passes did not fetch ──');
+  const batches = recheckBatches(await storedLiveRows(supabase), seen);
+  let fetched = 0;
+  let asked = 0;
+  for (const ids of batches) {
+    try {
+      const { data } = await fetchAniListPage(1, RECHECK_BATCH, 'POPULARITY_DESC', undefined, ids);
+      for (const path of await syncAnimeToSupabase(supabase, data, schema)) changed.add(path);
+      fetched += data.length;
+      asked += ids.length;
+    } catch (error) {
+      console.error('  recheck batch failed:', error instanceof Error ? error.message : error);
+    }
+    await sleep(REQUEST_INTERVAL_MS);
+  }
+  // A title AniList no longer returns (removed, merged, or now marked adult)
+  // keeps its stored row as it was.
+  console.log(`  rechecked ${fetched} of ${asked} titles in ${batches.length} requests`);
+  return fetched;
 }
 
 async function syncAnime() {
@@ -279,10 +331,18 @@ async function syncAnime() {
   const started = Date.now();
   let total = 0;
   const changed = new Set<string>();
+  const seen = new Set<string>();
 
   for (const pass of passes) {
-    total += await runPass(supabase, pass, schema, changed);
+    total += await runPass(supabase, pass, schema, changed, seen);
     await sleep(REQUEST_INTERVAL_MS);
+  }
+
+  try {
+    total += await recheckStale(supabase, schema, seen, changed);
+  } catch (error) {
+    // The passes' writes stand, and their changes still go to IndexNow.
+    console.error('Recheck skipped:', error instanceof Error ? error.message : error);
   }
 
   const mins = ((Date.now() - started) / 60000).toFixed(1);
