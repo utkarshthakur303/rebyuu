@@ -3,7 +3,7 @@ dotenv.config({ path: ".env" });
 import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
 import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
-import { toRow, DETAIL_COLUMNS } from './animeRow.mjs';
+import { toRow, DETAIL_COLUMNS, SEASON_YEAR_COLUMNS } from './animeRow.mjs';
 import { animePath } from '../api/_paths.js';
 const ANILIST_API = 'https://graphql.anilist.co';
 
@@ -37,6 +37,7 @@ const ANILIST_QUERY = `
           year
         }
         season
+        seasonYear
         status
         episodes
         description
@@ -83,21 +84,37 @@ type AniListMedia = { id: number } & Record<string, unknown>;
 /** Which columns this run writes, decided once from the live schema. */
 interface Schema {
   details: boolean;
+  seasonYear: boolean;
   columns: string[];
 }
 
+/** Null when `columns` all exist, else the database's reason they don't. */
+async function missingColumns(supabase: ReturnType<typeof createClient>, columns: string[]): Promise<string | null> {
+  const { error } = await supabase.from('anime_index').select(columns.join(',')).limit(1);
+  return error ? error.message : null;
+}
+
 /**
- * The detail columns exist only once supabase/title_details_migration.sql has
- * been run. Until then the sync keeps writing the original columns, so
- * deploying this before the migration changes nothing.
+ * Each migration's columns are checked for separately and written only once
+ * they exist, so deploying this before a migration runs changes nothing, and
+ * a missing season_year never costs the detail columns.
  */
 async function detectSchema(supabase: ReturnType<typeof createClient>): Promise<Schema> {
-  const { error } = await supabase.from('anime_index').select(DETAIL_COLUMNS.join(',')).limit(1);
-  if (error) {
-    console.log(`Detail columns not found (${error.message}). Writing base columns only — run supabase/title_details_migration.sql to enable them.`);
-    return { details: false, columns: SYNCED_COLUMNS };
+  const detailsMissing = await missingColumns(supabase, DETAIL_COLUMNS);
+  if (detailsMissing) {
+    console.log(`Detail columns not found (${detailsMissing}). Skipping them — run supabase/title_details_migration.sql to enable them.`);
   }
-  return { details: true, columns: [...SYNCED_COLUMNS, ...DETAIL_COLUMNS] };
+  const seasonYearMissing = await missingColumns(supabase, SEASON_YEAR_COLUMNS);
+  if (seasonYearMissing) {
+    console.log(`season_year not found (${seasonYearMissing}). Skipping it — run supabase/season_year_migration.sql to enable it.`);
+  }
+  const details = !detailsMissing;
+  const seasonYear = !seasonYearMissing;
+  return {
+    details,
+    seasonYear,
+    columns: [...SYNCED_COLUMNS, ...(details ? DETAIL_COLUMNS : []), ...(seasonYear ? SEASON_YEAR_COLUMNS : [])],
+  };
 }
 
 type AniListSort = 'POPULARITY_DESC' | 'TRENDING_DESC' | 'START_DATE_DESC';
@@ -162,7 +179,7 @@ async function syncAnimeToSupabase(
   media: AniListMedia[],
   schema: Schema
 ): Promise<string[]> {
-  const animeData = media.map((m) => toRow(m, { details: schema.details }));
+  const animeData = media.map((m) => toRow(m, { details: schema.details, seasonYear: schema.seasonYear }));
 
   // Read the rows as they stand, so only titles that really changed are
   // written (keeping updated_at, and so the sitemap's lastmod, truthful) and

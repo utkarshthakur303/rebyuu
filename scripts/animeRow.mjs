@@ -20,6 +20,12 @@ export const DETAIL_COLUMNS = [
   'streaming', 'relations', 'next_episode', 'next_episode_at',
 ];
 
+/**
+ * Added by season_year_migration.sql, and checked for on its own: a sync that
+ * runs before that migration keeps writing every other column.
+ */
+export const SEASON_YEAR_COLUMNS = ['season_year'];
+
 const STATUS = {
   RELEASING: 'airing',
   FINISHED: 'completed',
@@ -77,7 +83,12 @@ function relatedEntries(relations) {
   ];
 }
 
-export function toRow(m, { details = true } = {}) {
+/**
+ * `details` and `seasonYear` say which migrations the database has had
+ * (DETAIL_COLUMNS, SEASON_YEAR_COLUMNS); a column is only produced once it
+ * exists.
+ */
+export function toRow(m, { details = true, seasonYear = details } = {}) {
   const row = {
     id: `anilist-${m.id}`,
     title: m.title.english || m.title.romaji,
@@ -93,6 +104,9 @@ export function toRow(m, { details = true } = {}) {
     trailer: m.trailer?.site === 'youtube' && m.trailer?.id ? `https://www.youtube.com/watch?v=${m.trailer.id}` : null,
     anilist_id: m.id,
   };
+  // AniList files a December premiere under the next year's Winter; `year`
+  // stays the start year. See seasonYearOf in api/_catalog.js.
+  if (seasonYear) row.season_year = m.seasonYear ?? null;
   if (!details) return row;
 
   return {
