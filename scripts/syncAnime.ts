@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
 import { toRow, DETAIL_COLUMNS, SEASON_YEAR_COLUMNS } from './animeRow.mjs';
 import { recheckBatches, RECHECK_BATCH } from './recheck.mjs';
+import { seasonPasses } from './passes.mjs';
 import { animePath } from '../api/_paths.js';
 const ANILIST_API = 'https://graphql.anilist.co';
 
@@ -13,14 +14,14 @@ const ANILIST_API = 'https://graphql.anilist.co';
 // their columns has run. Measured on a live 50-title page: ~1.6 s, ~150-200 KB,
 // well inside AniList's complexity limit.
 const ANILIST_QUERY = `
-  query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $ids: [Int]) {
+  query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $ids: [Int], $season: MediaSeason, $seasonYear: Int) {
     Page(page: $page, perPage: $perPage) {
       pageInfo {
         total
         currentPage
         hasNextPage
       }
-      media(type: ANIME, sort: $sort, status: $status, id_in: $ids, isAdult: false) {
+      media(type: ANIME, sort: $sort, status: $status, id_in: $ids, season: $season, seasonYear: $seasonYear, isAdult: false) {
         id
         idMal
         title {
@@ -134,7 +135,8 @@ async function fetchAniListPage(
   perPage: number = 50,
   sort: AniListSort = 'POPULARITY_DESC',
   status?: AniListStatus,
-  ids?: number[]
+  ids?: number[],
+  season?: { season: string; seasonYear: number }
 ): Promise<{ data: AniListMedia[]; hasNextPage: boolean }> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const response = await fetch(ANILIST_API, {
@@ -145,7 +147,7 @@ async function fetchAniListPage(
       },
       body: JSON.stringify({
         query: ANILIST_QUERY,
-        variables: { page, perPage, sort: [sort], status, ids }
+        variables: { page, perPage, sort: [sort], status, ids, ...season }
       })
     });
 
@@ -211,6 +213,9 @@ interface Pass {
   label: string;
   sort: AniListSort;
   status?: AniListStatus;
+  /** AniList's season enum and season year, for a pass over one whole season. */
+  season?: string;
+  seasonYear?: number;
   maxPages: number;
 }
 
@@ -246,7 +251,10 @@ async function runPass(
 
   for (let page = 1; page <= pass.maxPages; page++) {
     try {
-      const { data, hasNextPage } = await fetchAniListPage(page, 50, pass.sort, pass.status);
+      const { data, hasNextPage } = await fetchAniListPage(
+        page, 50, pass.sort, pass.status, undefined,
+        pass.season && pass.seasonYear ? { season: pass.season, seasonYear: pass.seasonYear } : undefined
+      );
       if (!data.length) break;
 
       for (const m of data) seen.add(`anilist-${m.id}`);
@@ -324,7 +332,8 @@ async function syncAnime() {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
   const mode = (process.env.SYNC_MODE || 'fresh').toLowerCase();
-  const passes = mode === 'full' ? FULL_PASSES : FRESH_PASSES;
+  // Every season page's titles are in the catalogue: see passes.mjs.
+  const passes = [...(mode === 'full' ? FULL_PASSES : FRESH_PASSES), ...(seasonPasses() as Pass[])];
 
   console.log(`Starting AniList sync (mode=${mode})...`);
   const schema = await detectSchema(supabase);
