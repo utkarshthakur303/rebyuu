@@ -1,4 +1,6 @@
 import { SHELL } from './_shell.js';
+import { ORIGIN, escapeHtml, stripTags, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
+import { sb, anilist, rankedIds, rowsById } from './_upstream.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath, parseAnimeRef } from './_paths.js';
@@ -39,12 +41,6 @@ import {
  * why the detail page could not preload its own LCP element.
  */
 
-const ORIGIN = 'https://www.rebyuu.app';
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = process.env.VITE_SUPABASE_KEY;
-
-const ANILIST_API = 'https://graphql.anilist.co';
-
 /** Minimum first-party ratings before a community score is real enough to publish. */
 const MIN_RATINGS_FOR_SCORE = 3;
 
@@ -77,9 +73,6 @@ const BROWSE_PAGE_SIZE = 24;
 /** Written pages rendered from their shared copy in _pages.js. */
 const PROSE_ROUTES = ['about', 'terms', 'privacy'];
 
-/** A slow AniList must not hold a crawler's request open; the archive fallback is fine. */
-const ANILIST_TIMEOUT_MS = 2500;
-
 /**
  * True when the request carries query parameters the renderer does not read:
  * fbclid, gclid, utm_*, or a /browse filter. The query string rides along on
@@ -91,70 +84,6 @@ const ANILIST_TIMEOUT_MS = 2500;
  */
 const INTERNAL_PARAMS = new Set(['route', 'id', 'ref', 'ep']);
 const isVariant = (url) => [...url.searchParams.keys()].some((k) => !INTERNAL_PARAMS.has(k));
-
-const escapeHtml = (s) =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-/** AniList synopses carry HTML. Strip it, collapse whitespace, keep the words. */
-const stripTags = (s) =>
-  String(s ?? '')
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const truncate = (s, n) => {
-  const t = stripTags(s);
-  if (t.length <= n) return t;
-  const cut = t.slice(0, n);
-  const lastSpace = cut.lastIndexOf(' ');
-  return (lastSpace > n * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.\s]+$/, '') + '…';
-};
-
-/**
- * JSON-LD is injected inside a <script> tag, so the one character that must
- * never survive is the sequence that could close it early.
- */
-const jsonLd = (obj) =>
-  JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
-
-async function sb(path) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-/** Resolves to the GraphQL `data` object, or null on any failure. */
-async function anilist(query) {
-  try {
-    const res = await fetch(ANILIST_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ query }),
-      signal: AbortSignal.timeout(ANILIST_TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.errors ? null : json.data ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** anime_index ids for an AniList `Page { media { id } }`, in ranking order. */
-const rankedIds = (pageData) => (pageData?.media ?? []).map((m) => `anilist-${m.id}`);
 
 /** Comments shown on an episode page, newest first. */
 const THREAD_SIZE = 20;
@@ -178,15 +107,6 @@ async function loadEpisodeActivity(id) {
     sb(`episode_ratings?anime_id=eq.${key}&select=episode_number`),
   ]);
   return episodeActivity(Array.isArray(comments) ? comments : [], Array.isArray(ratings) ? ratings : []);
-}
-
-/** One anime_index read for a set of ids, as a Map keyed by id. */
-async function rowsById(ids) {
-  const unique = [...new Set(ids)];
-  const rows = unique.length
-    ? await sb(`anime_index?id=in.(${unique.join(',')})&select=id,title,year`)
-    : [];
-  return new Map((Array.isArray(rows) ? rows : []).map((row) => [row.id, row]));
 }
 
 /**
@@ -257,84 +177,6 @@ async function loadRelated(row) {
     if (picked.length === RELATED_SIZE) break;
   }
   return picked;
-}
-
-/** A heading plus a plain ordered list of title links. Empty rails render nothing. */
-function renderTitleList({ heading, subtitle, items }) {
-  if (!items.length) return '';
-  const lis = items
-    .map((row) =>
-      `<li><a href="${escapeHtml(animePath(row))}">${escapeHtml(row.title || 'Untitled')}</a>${row.year ? ` <span style="opacity:.6">(${escapeHtml(String(row.year))})</span>` : ''}</li>`
-    )
-    .join('\n          ');
-  return `
-      <section style="margin-top:36px">
-        <h2 style="font-family:Anton,Impact,sans-serif;font-size:26px;line-height:1.1">${escapeHtml(heading)}</h2>
-        ${subtitle ? `<p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:12px;letter-spacing:.15em;text-transform:uppercase;opacity:.6;margin-top:4px">${escapeHtml(subtitle)}</p>` : ''}
-        <ol style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:10px;padding-left:1.4em">
-          ${lis}
-        </ol>
-      </section>`;
-}
-
-/**
- * Every indexable page allows large image previews: without this directive
- * Google shows at most a thumbnail, and in Discover — a large source of anime
- * traffic — a thumbnail-only card barely gets shown at all. Pages that set
- * their own robots value (noindex) replace it.
- */
-const DEFAULT_ROBOTS = 'max-image-preview:large';
-
-/** Replaces the shell's single shared title/description with this route's. */
-function injectHead(html, { title, description, canonical, image, preload = image, ld, robots }) {
-  const tags = [
-    `<title>${escapeHtml(title)}</title>`,
-    `<meta name="description" content="${escapeHtml(description)}" />`,
-    `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
-    `<meta property="og:title" content="${escapeHtml(title)}" />`,
-    `<meta property="og:description" content="${escapeHtml(description)}" />`,
-    `<meta property="og:url" content="${escapeHtml(canonical)}" />`,
-    `<meta property="og:type" content="website" />`,
-    `<meta property="og:site_name" content="Rebyuu" />`,
-    `<meta name="twitter:card" content="summary_large_image" />`,
-    `<meta name="twitter:title" content="${escapeHtml(title)}" />`,
-    `<meta name="twitter:description" content="${escapeHtml(description)}" />`,
-  ];
-  if (image) {
-    tags.push(`<meta property="og:image" content="${escapeHtml(image)}" />`);
-    tags.push(`<meta name="twitter:image" content="${escapeHtml(image)}" />`);
-  }
-  // Lets the browser start the LCP fetch during head parse, before the
-  // bundle has run — impossible while the URL was only knowable in JS.
-  // `preload` is the image the page paints first, which is not always the
-  // share image: a title page shares its poster but paints its banner.
-  if (preload) tags.push(`<link rel="preload" as="image" href="${escapeHtml(preload)}" fetchpriority="high" />`);
-  tags.push(`<meta name="robots" content="${escapeHtml(robots || DEFAULT_ROBOTS)}" />`);
-  if (ld) tags.push(`<script type="application/ld+json">${jsonLd(ld)}</script>`);
-
-  // Drop the shell's generic tags so the document never carries two of any.
-  let out = html
-    .replace(/<title>[\s\S]*?<\/title>/i, '')
-    .replace(/<meta\s+name="description"[^>]*>/gi, '')
-    .replace(/<meta\s+property="og:title"[^>]*>/gi, '')
-    .replace(/<meta\s+property="og:description"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:title"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:description"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:card"[^>]*>/gi, '');
-
-  return out.replace('</head>', `${tags.join('\n    ')}\n  </head>`);
-}
-
-/**
- * Injected into #root. React clears this on mount. `boot` is data the page
- * was built from, handed to React after #root so its first render can use it
- * instead of fetching it again (see takeBoot in services/anime.ts).
- */
-function injectBody(html, content, boot = null) {
-  const data = boot ? `\n    <script id="rebyuu-boot" type="application/json">${jsonLd(boot)}</script>` : '';
-  return html
-    .replace('<div id="root"></div>', `<div id="root">${content}</div>`)
-    .replace('</body>', `${data}\n  </body>`);
 }
 
 /**
