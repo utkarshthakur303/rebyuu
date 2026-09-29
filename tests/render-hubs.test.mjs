@@ -186,3 +186,12 @@ test('the upcoming page links each season its shows are announced for', async ()
   assert.match(rootOf(res.body), new RegExp(`Upcoming seasons: <a href="/seasons/winter-${YEAR + 1}">Winter ${YEAR + 1}</a> · <a href="/seasons/spring-${YEAR + 1}">Spring ${YEAR + 1}</a>`));
   assert.deepEqual(animeLinks(rootOf(res.body)), ['anilist-1', 'anilist-2', 'anilist-3']);
 });
+
+test('hub pages link each other, for crawlers that do not run the app', async () => {
+  installFetch({ tables: { anime_index: [anime(1, 'Airing One', { status: 'airing' })] }, anilist: aniList({ list: { p1: media([1]), p2: noPage } }) });
+
+  const root = rootOf((await render(handler, 'route=hub&hub=airing')).body);
+
+  assert.match(root, /Seasons and charts/);
+  assert.match(root, /<a href="\/upcoming">Upcoming anime<\/a>/);
+});

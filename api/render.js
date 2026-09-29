@@ -1,8 +1,8 @@
 import { SHELL } from './_shell.js';
 import { ORIGIN, escapeHtml, stripTags, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
 import { sb, anilist, rankedIds, rowsById } from './_upstream.js';
-import { parseHubPath, hubPath, hubNavLinks } from './_hubs.js';
-import { loadHub, renderHub, HubDataError, LIST_COLUMNS, bootItem } from './_hubpage.js';
+import { parseHubPath, hubPath } from './_hubs.js';
+import { loadHub, renderHub, renderHubLinks, HubDataError, LIST_COLUMNS, bootItem } from './_hubpage.js';
 import { EXCLUDED_GENRES } from './_catalog.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
@@ -485,14 +485,6 @@ function renderBrowse({ items, live }) {
   );
 }
 
-/** The hub pages every served page links: this season, next season, airing, upcoming. */
-function renderHubLinks(now = new Date()) {
-  return `
-      <section style="margin-top:36px">
-        <h2 style="font-family:Anton,Impact,sans-serif;font-size:26px;line-height:1.1">Seasons and charts</h2>
-        <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:10px">${hubNavLinks(now).map((l) => `<a href="${escapeHtml(l.path)}">${escapeHtml(l.label)}</a>`).join(' · ')}</p>
-      </section>`;
-}
 
 /**
  * About, Terms and Privacy: the header block ProsePage renders — eyebrow,
