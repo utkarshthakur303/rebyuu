@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { hubTitle, hubHeading, hubDescription, hubListHeading, hubLinksLabel, hubIntro, listNames } from '../api/_hubcopy.js';
-import { SEASONS } from '../api/_catalog.js';
+import { SEASONS, GENRES } from '../api/_catalog.js';
 
 const NOW = new Date('2026-09-29T12:00:00Z');
 const season = (name, year) => ({ kind: 'season', season: name, year });
@@ -86,4 +86,65 @@ test('airing and upcoming intros name the lead shows when there are any', () => 
     hubIntro({ kind: 'upcoming' }, [item('A')], NOW),
     "Anime that have been announced but haven't started yet, most anticipated first. The most awaited is A."
   );
+});
+
+const top = { kind: 'top' };
+const year = (y) => ({ kind: 'year', year: y });
+const genre = (g) => ({ kind: 'genre', genre: g });
+
+test('top, year and genre titles', () => {
+  assert.equal(hubTitle(top, NOW), 'Top Rated Anime of All Time · Rebyuu');
+  assert.equal(hubTitle(year(2025), NOW), 'Best Anime of 2025, Top Rated First · Rebyuu');
+  assert.equal(hubTitle(year(2026), NOW), 'Best Anime of 2026 So Far · Rebyuu');
+  assert.equal(hubTitle(genre('Romance'), NOW), 'Best Romance Anime, Most Popular First · Rebyuu');
+});
+
+test('every year and genre title fits 60 characters and description 160', () => {
+  const hubs = [top, ...GENRES.map(genre)];
+  for (let y = 1900; y <= 2026; y++) hubs.push(year(y));
+  for (const hub of hubs) {
+    assert.ok(hubTitle(hub, NOW).length <= 60, hubTitle(hub, NOW));
+    assert.ok(hubDescription(hub, NOW).length <= 160, hubDescription(hub, NOW));
+  }
+});
+
+test('a "best" heading holds only while the grid is ranked by merit', () => {
+  assert.equal(hubHeading(top, { sort: 'score', now: NOW }), 'Top Rated Anime');
+  assert.equal(hubHeading(year(2025), { sort: 'score', now: NOW }), 'Best Anime of 2025');
+  assert.equal(hubHeading(year(2026), { sort: 'score', now: NOW }), 'Best Anime of 2026 So Far');
+  assert.equal(hubHeading(year(2025), { sort: 'trending', now: NOW }), 'Anime of 2025');
+  assert.equal(hubHeading(year(2025), { sort: 'newest', now: NOW }), 'Anime of 2025');
+  assert.equal(hubHeading(genre('Romance'), { sort: 'popularity', now: NOW }), 'Best Romance Anime');
+  assert.equal(hubHeading(genre('Romance'), { sort: 'favorites', now: NOW }), 'Best Romance Anime');
+  assert.equal(hubHeading(genre('Romance'), { sort: 'trending', now: NOW }), 'Romance Anime');
+});
+
+test('top, year and genre list headings, links labels and descriptions', () => {
+  assert.equal(hubListHeading(top), 'Top rated anime of all time');
+  assert.equal(hubListHeading(year(2025)), 'Top rated anime of 2025');
+  assert.equal(hubListHeading(genre('Slice of Life')), 'The most popular slice of life anime');
+  assert.equal(hubLinksLabel(top), 'By year');
+  assert.equal(hubLinksLabel(year(2025)), 'Seasons of 2025');
+  assert.equal(hubLinksLabel(genre('Romance')), 'Other genres');
+  assert.match(hubDescription(genre('Sci-Fi'), NOW), /^The most popular sci-fi anime of all time, ranked\./);
+  assert.match(hubDescription(year(2026), NOW), /^The best anime of 2026 so far, top rated first\./);
+});
+
+test('top and year intros name what leads the ranking', () => {
+  const lead = [item('A', 9.1), item('B', 9), item('C', 8.9), item('D', 8.8)];
+  assert.equal(hubIntro(top, lead, NOW), "The highest rated anime of all time, by the average score of AniList's users. At the top: A, B and C.");
+  assert.equal(hubIntro(year(2025), lead, NOW), 'The best anime of 2025 by AniList score. The top three are A, B and C.');
+  assert.equal(hubIntro(year(2026), lead, NOW), 'The best anime of 2026 so far, by AniList score. Leading the year: A, B and C.');
+  assert.equal(hubIntro(year(2025), [], NOW), 'The best anime of 2025 by AniList score.');
+});
+
+test('every genre has an intro of its own, followed by its most popular shows', () => {
+  const intros = new Set();
+  for (const g of GENRES) {
+    const intro = hubIntro(genre(g), [], NOW);
+    assert.match(intro, /^[A-Z].{40,240}\.$/, g);
+    intros.add(intro);
+  }
+  assert.equal(intros.size, GENRES.length);
+  assert.match(hubIntro(genre('Romance'), [item('A'), item('B')], NOW), /\. The most popular are A and B\.$/);
 });

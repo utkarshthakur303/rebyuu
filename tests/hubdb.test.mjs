@@ -75,7 +75,7 @@ test('with AniList down, airing lists airing titles and upcoming lists the soone
   assert.deepEqual((await rows(hubFallbackPath({ kind: 'upcoming' }, { columns: 'id', limit: 100 }))).map((r) => r.id), ['anilist-4', 'anilist-3']);
 });
 
-test('the census lists airing, upcoming and every season with 12 quality titles, oldest first', async () => {
+test('the census lists airing, upcoming, top and every season with 12 quality titles, oldest first', async () => {
   installFetch({
     tables: {
       anime_index: [
@@ -90,7 +90,8 @@ test('the census lists airing, upcoming and every season with 12 quality titles,
 
   const paths = indexedHubPaths(await rows(censusPath(NOW)), NOW);
 
-  assert.deepEqual(paths, ['/airing', '/upcoming', '/seasons/fall-2015', '/seasons/winter-2016']);
+  // Its 35 titles from 2015 also make that year's page.
+  assert.deepEqual(paths, ['/airing', '/upcoming', '/top', '/top/2015', '/seasons/fall-2015', '/seasons/winter-2016']);
 });
 
 test('the census and each page count the same titles, so the sitemap never lists a noindex page', async () => {
@@ -110,4 +111,73 @@ test('the census and each page count the same titles, so the sitemap never lists
     assert.equal(listed.has(path), indexed, path);
   }
   assert.ok(listed.has('/seasons/winter-2016'));
+});
+
+test('a year counts quality titles that started in it; a genre, those tagged with it', async () => {
+  installFetch({
+    tables: {
+      anime_index: [
+        ...many(1, 3, { year: 2025, genres: ['Slice of Life'] }),
+        quality(10, { year: 2024, season: 'Winter', season_year: 2025, genres: ['Slice of Life', 'Hentai'] }),
+        quality(11, { year: 2025, genres: ['Comedy'] }),
+      ],
+    },
+  });
+
+  // A year is the start year, as Browse's year filter is.
+  assert.equal((await rows(hubCountPath({ kind: 'year', year: 2025 }, NOW))).length, 4);
+  assert.equal((await rows(hubCountPath({ kind: 'genre', genre: 'Slice of Life' }, NOW))).length, 3);
+  assert.equal(hubCountPath({ kind: 'top' }, NOW), null);
+  assert.equal(isIndexable({ kind: 'top' }, 0), true);
+});
+
+test('with AniList down, a genre lists its titles best rated first', async () => {
+  installFetch({
+    tables: {
+      anime_index: [
+        quality(1, { genres: ['Slice of Life'], rating: 7 }),
+        quality(2, { genres: ['Comedy', 'Slice of Life'], rating: 8 }),
+        quality(3, { genres: ['Comedy'], rating: 9 }),
+      ],
+    },
+  });
+
+  const listed = await rows(hubFallbackPath({ kind: 'genre', genre: 'Slice of Life' }, { columns: 'id', limit: 100 }));
+
+  assert.deepEqual(listed.map((r) => r.id), ['anilist-2', 'anilist-1']);
+});
+
+test('the census adds top rated, each genre and each past year with 12 quality titles', async () => {
+  installFetch({
+    tables: {
+      anime_index: [
+        ...many(100, 12, { year: 2015, genres: ['Romance'] }),
+        ...many(200, 11, { year: 2016, genres: ['Mecha'] }),
+        ...many(300, 12, { year: 2027, status: 'upcoming', genres: ['Romance'] }), // a year still to come
+      ],
+    },
+  });
+
+  const paths = indexedHubPaths(await rows(censusPath(NOW)), NOW);
+
+  assert.deepEqual(paths, ['/airing', '/upcoming', '/top', '/genres/romance', '/top/2015']);
+});
+
+test('the census and each year or genre page count the same titles', async () => {
+  installFetch({
+    tables: {
+      anime_index: [
+        ...many(100, 12, { year: 2015, genres: ['Romance'] }),
+        ...many(200, 11, { year: 2016, genres: ['Mecha'] }),
+        ...many(300, 6, { year: 2017, genres: ['Slice of Life', 'Hentai'] }),
+        ...many(400, 12, { year: 2017, genres: ['Slice of Life'] }),
+      ],
+    },
+  });
+
+  const listed = new Set(indexedHubPaths(await rows(censusPath(NOW)), NOW));
+  for (const path of ['/top/2015', '/top/2016', '/top/2017', '/genres/romance', '/genres/mecha', '/genres/slice-of-life']) {
+    const hub = parseHubPath(path, NOW);
+    assert.equal(listed.has(path), isIndexable(hub, (await rows(hubCountPath(hub, NOW))).length), path);
+  }
 });

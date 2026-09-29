@@ -161,7 +161,7 @@ test('before the migration, the episode sitemap still lists discussed episodes',
   assert.deepEqual(episodeLocs(res.body).sort(), ['/anime/1-show-1/episode/3', '/anime/1-show-1/episode/7']);
 });
 
-test('the hub sitemap lists airing, upcoming and every season with 12 quality titles', async () => {
+test('the hub sitemap lists airing, upcoming, top, and every year and season with 12 quality titles', async () => {
   const season = (from, count, extra) => Array.from({ length: count }, (_, i) => row(from + i, { rating: 7, ...extra }));
   installFetch({
     tables: {
@@ -181,6 +181,8 @@ test('the hub sitemap lists airing, upcoming and every season with 12 quality ti
   assert.deepEqual(locs(res.body), [
     'https://www.rebyuu.app/airing',
     'https://www.rebyuu.app/upcoming',
+    'https://www.rebyuu.app/top',
+    'https://www.rebyuu.app/top/2015',
     'https://www.rebyuu.app/seasons/fall-2015',
     'https://www.rebyuu.app/seasons/winter-2016',
   ]);

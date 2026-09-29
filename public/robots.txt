@@ -58,8 +58,9 @@
 # before rewrites: while dist/index.html existed, "/" was satisfied by the
 # static file and never reached the prerender function.
 #
-# The hub pages (/seasons/:season-:year, /airing, /upcoming, added
-# 2026-09-29) are intentionally NOT disallowed: they are the few Browse
+# The hub pages (/seasons/:season-:year, /airing, /upcoming, /top,
+# /top/:year, /genres/:genre, added 2026-09-29) are intentionally NOT
+# disallowed: they are the few Browse
 # views given an address of their own so they can be indexed. Their query-
 # string variants (another sort order, a later page) canonicalise to the
 # bare path and are not linked, so they need no rule.

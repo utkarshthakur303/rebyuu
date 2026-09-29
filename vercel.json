@@ -78,6 +78,18 @@
       "destination": "/api/render?route=hub&hub=upcoming"
     },
     {
+      "source": "/top",
+      "destination": "/api/render?route=hub&hub=top"
+    },
+    {
+      "source": "/top/:key(\\d{4})",
+      "destination": "/api/render?route=hub&hub=top&key=:key"
+    },
+    {
+      "source": "/genres/:key([A-Za-z0-9-]+)",
+      "destination": "/api/render?route=hub&hub=genre&key=:key"
+    },
+    {
       "source": "/anime/:ref(\\d+[A-Za-z0-9-]*)/episode/:ep(\\d+)",
       "destination": "/api/render?route=episode&ref=:ref&ep=:ep"
     },

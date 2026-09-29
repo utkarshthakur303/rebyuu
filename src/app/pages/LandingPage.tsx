@@ -6,8 +6,9 @@ import { HeroSection } from '@/app/components/HeroSection';
 import { getTrendingAnime, getFanFavorites, getAiringNow, getUpcoming, type Anime } from '@/services/anime';
 import { useAuth } from '@/context/AuthContext';
 // The Airing and Upcoming rails continue on their hub pages, which open in
-// the same order (trending, most popular) — see api/_hubs.js.
-import { hubPath } from '../../../api/_hubs.js';
+// the same order (trending, most popular), and the genre tiles open genre
+// pages — see api/_hubs.js.
+import { hubPath, genrePath } from '../../../api/_hubs.js';
 
 /** Cards per homepage section — 8 fills exactly two rows on the 4-up grid. */
 const SECTION_SIZE = 8;
@@ -203,7 +204,7 @@ export default function LandingPage() {
                 className="relative"
               >
                 <Link
-                  to={`/browse?genre=${genre.toLowerCase()}`}
+                  to={genrePath(genre)}
                   className="group block"
                 >
                   <div className="relative overflow-hidden border-2 border-ink bg-card p-5 sm:p-6 text-center transition-all duration-300 hover:shadow-[6px_6px_0_var(--orange)] active:shadow-none">

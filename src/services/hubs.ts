@@ -21,13 +21,13 @@ export interface ScheduleEntry {
   at: number;
 }
 
-type Hub = { kind: string; season?: string; year?: number };
+type Hub = { kind: string; season?: string; year?: number; genre?: string };
 
-/** The season links above a hub's grid; [] if there are none or AniList can't be reached. */
+/** The links above a hub's grid; [] if there are none or AniList can't be reached. */
 export async function getHubLinks(hub: Hub): Promise<HubLink[]> {
   const query = hubLinksQuery(hub);
-  if (!query) return [];
-  const data = await anilistRequest<Record<string, unknown>>(query, {}, 8000);
+  // Some hubs' links need no lookup (/top's years, a genre's fellow genres).
+  const data = query ? await anilistRequest<Record<string, unknown>>(query, {}, 8000) : {};
   return readHubLinks(hub, data, new Date());
 }
 

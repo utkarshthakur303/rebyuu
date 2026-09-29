@@ -196,3 +196,71 @@ test('hub pages link each other, for crawlers that do not run the app', async ()
   assert.match(root, /Seasons and charts/);
   assert.match(root, /<a href="\/upcoming">Upcoming anime<\/a>/);
 });
+
+const ranked = (ids, more = false) => ({ p1: media(ids.slice(0, 50), more), p2: media(ids.slice(50, 100)) });
+
+test('the top rated page ranks by score and links every year', async () => {
+  installFetch({ tables: { anime_index: [anime(1, 'Best'), anime(2, 'Next')] }, anilist: aniList({ list: ranked([1, 2]) }) });
+
+  const res = await render(handler, 'route=hub&hub=top');
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(titleOf(res.body), 'Top Rated Anime of All Time · Rebyuu');
+  assert.equal(robotsOf(res.body), 'max-image-preview:large');
+  assert.deepEqual(animeLinks(rootOf(res.body)), ['anilist-1', 'anilist-2']);
+  assert.match(rootOf(res.body), new RegExp(`By year: <a href="/top/${YEAR}">${YEAR}</a>`));
+});
+
+test('a year page: its best shows, its seasons, indexed from 12 quality titles', async () => {
+  const of2015 = Array.from({ length: 12 }, (_, i) => fall2015(i + 1));
+  installFetch({
+    tables: { anime_index: of2015 },
+    anilist: aniList({ list: { ...ranked([2, 1]), winter: media([5]), spring: noPage, summer: noPage, fall: media([1]) } }),
+  });
+
+  const res = await render(handler, 'route=hub&hub=top&key=2015');
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(titleOf(res.body), 'Best Anime of 2015, Top Rated First · Rebyuu');
+  assert.equal(canonicalOf(res.body), 'https://www.rebyuu.app/top/2015');
+  assert.equal(robotsOf(res.body), 'max-image-preview:large');
+  assert.match(rootOf(res.body), /Seasons of 2015: <a href="\/seasons\/winter-2015">Winter 2015<\/a> · <a href="\/seasons\/fall-2015">Fall 2015<\/a>/);
+});
+
+test('a genre page: its most popular shows and the other genres', async () => {
+  installFetch({ tables: { anime_index: [anime(1, 'Cozy', { genres: ['Slice of Life'] })] }, anilist: aniList({ list: ranked([1]) }) });
+
+  const res = await render(handler, 'route=hub&hub=genre&key=slice-of-life');
+  const root = rootOf(res.body);
+
+  assert.equal(res.statusCode, 200);
+  assert.equal(titleOf(res.body), 'Best Slice of Life Anime, Most Popular First · Rebyuu');
+  // One title: too thin to index.
+  assert.equal(robotsOf(res.body), 'noindex, follow');
+  assert.match(root, /<h1[^>]*>Best Slice of Life Anime<\/h1>/);
+  assert.match(root, /Everyday life told with care/);
+  const others = root.match(/Other genres: (.*?)<\/p>/s)?.[1] ?? '';
+  assert.match(others, /^<a href="\/genres\/action">Action<\/a>/);
+  assert.equal((others.match(/<a /g) || []).length, 17);
+  assert.doesNotMatch(others, /slice-of-life/);
+});
+
+test('a genre in another case redirects; an unknown genre or a year to come is a 404', async () => {
+  installFetch({ tables: { anime_index: [anime(1, 'One')] }, anilist: aniList({ list: ranked([1]) }) });
+
+  const moved = await render(handler, 'route=hub&hub=genre&key=Sci-Fi');
+  assert.equal(moved.statusCode, 301);
+  assert.equal(moved.headers.location, 'https://www.rebyuu.app/genres/sci-fi');
+  assert.equal((await render(handler, 'route=hub&hub=genre&key=isekai')).statusCode, 404);
+  assert.equal((await render(handler, `route=hub&hub=top&key=${YEAR + 1}`)).statusCode, 404);
+});
+
+test('served pages link every genre page', async () => {
+  installFetch({ tables: { anime_index: [anime(1, 'Airing One', { status: 'airing' })] }, anilist: aniList({ list: { p1: media([1]), p2: noPage } }) });
+
+  const root = rootOf((await render(handler, 'route=hub&hub=airing')).body);
+
+  assert.match(root, /<a href="\/top">Top rated anime<\/a>/);
+  assert.match(root, /Genres: <a href="\/genres\/action">Action<\/a>/);
+  assert.match(root, /<a href="\/genres\/thriller">Thriller<\/a>/);
+});

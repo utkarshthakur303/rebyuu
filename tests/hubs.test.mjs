@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   hubPath, seasonPath, parseHubPath, seasonOf, shiftSeason, seasonTense,
-  hubPreset, browseSearch, hubChangeTarget, hubNavLinks,
+  hubPreset, browseSearch, hubChangeTarget, hubNavLinks, genrePath,
 } from '../api/_hubs.js';
 
 const NOW = new Date('2026-09-29T12:00:00Z');
@@ -108,13 +108,53 @@ test('on a hub, a filter change opens Browse with the order carried over', () =>
   );
 });
 
-test('every page links this season, next season, the airing schedule and upcoming', () => {
+test('every page links this season, next season, the airing schedule, upcoming and top rated', () => {
   assert.deepEqual(hubNavLinks(NOW), [
     { label: 'Summer 2026 anime', path: '/seasons/summer-2026' },
     { label: 'Fall 2026 anime', path: '/seasons/fall-2026' },
     { label: 'Airing schedule', path: '/airing' },
     { label: 'Upcoming anime', path: '/upcoming' },
+    { label: 'Top rated anime', path: '/top' },
   ]);
   // In December the next season is next year's Winter.
   assert.equal(hubNavLinks(new Date('2026-12-15T00:00:00Z'))[1].path, '/seasons/winter-2027');
+});
+
+test('top rated, a year and a genre each have one path', () => {
+  assert.equal(hubPath({ kind: 'top' }), '/top');
+  assert.equal(hubPath({ kind: 'year', year: 2025 }), '/top/2025');
+  assert.equal(hubPath({ kind: 'genre', genre: 'Slice of Life' }), '/genres/slice-of-life');
+  assert.equal(genrePath('Sci-Fi'), '/genres/sci-fi');
+});
+
+test('their paths are read back; years up to this one, genres in any case', () => {
+  assert.deepEqual(parseHubPath('/top', NOW), { kind: 'top' });
+  assert.deepEqual(parseHubPath('/top/2025', NOW), { kind: 'year', year: 2025 });
+  assert.deepEqual(parseHubPath('/top/2026', NOW), { kind: 'year', year: 2026 });
+  assert.deepEqual(parseHubPath('/genres/romance', NOW), { kind: 'genre', genre: 'Romance' });
+  assert.deepEqual(parseHubPath('/genres/Slice-Of-Life', NOW), { kind: 'genre', genre: 'Slice of Life' });
+  for (const path of ['/top/2027', '/top/1899', '/top/', '/genres/hentai', '/genres/isekai', '/genres/']) {
+    assert.equal(parseHubPath(path, NOW), null, path);
+  }
+});
+
+test('top and years open top rated first; genres most popular first', () => {
+  const none = { genres: [], year: null, season: null, status: 'all', query: '' };
+  assert.deepEqual(hubPreset({ kind: 'top' }), { filters: none, sort: 'score' });
+  assert.deepEqual(hubPreset({ kind: 'year', year: 2025 }), { filters: { ...none, year: 2025 }, sort: 'score' });
+  // By score, Comedy and Action open on a run of Gintama seasons.
+  assert.deepEqual(hubPreset({ kind: 'genre', genre: 'Romance' }), { filters: { ...none, genres: ['Romance'] }, sort: 'popularity' });
+});
+
+test('on /top the order is the page, so changing it opens Browse', () => {
+  assert.equal(hubChangeTarget({ kind: 'top' }, state({ sort: 'trending' }), 'trending'), '/browse');
+  assert.equal(hubChangeTarget({ kind: 'top' }, state({ sort: 'popularity' }), 'trending'), '/browse?sort=popularity');
+  assert.equal(hubChangeTarget({ kind: 'top' }, state({ sort: 'score', page: 2 }), 'trending'), '/top?page=2');
+  // A year and a genre keep their pages when the order changes.
+  assert.equal(hubChangeTarget({ kind: 'year', year: 2025 }, state({ year: 2025, sort: 'trending' }), 'trending'), '/top/2025?sort=trending');
+  assert.equal(hubChangeTarget({ kind: 'genre', genre: 'Romance' }, state({ genres: ['Romance'], sort: 'score' }), 'trending'), '/genres/romance?sort=score');
+  assert.equal(
+    hubChangeTarget({ kind: 'genre', genre: 'Romance' }, state({ genres: ['Romance', 'Comedy'], sort: 'popularity' }), 'trending'),
+    '/browse?genre=Romance%2CComedy&sort=popularity'
+  );
 });

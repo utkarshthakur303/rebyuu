@@ -10,6 +10,8 @@ import { supabase } from '@/services/supabase';
 import ListPickerModal from '@/app/components/ListPickerModal';
 import { toast } from 'sonner';
 import { useNoIndex } from '@/utils/useNoIndex';
+import { GENRES } from '../../../api/_catalog.js';
+import { genrePath } from '../../../api/_hubs.js';
 import { useAnimeTitle } from '@/context/TitleLangContext';
 import { useSeo } from '@/utils/useSeo';
 import { titleTag, metaDescription, otherNames, nameLang } from '../../../api/_titlepage.js';
@@ -425,15 +427,27 @@ export default function AnimeDetailPage() {
             </div>
 
             <div className="mb-4 sm:mb-5 flex flex-wrap gap-1.5">
-              {anime?.genres?.map((genre) => (
-                <span
-                  key={genre}
-                  className="rounded-sm border border-ink/35 bg-gold/5 px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-gold/70"
-                  style={{ fontFamily: 'Outfit, sans-serif' }}
-                >
-                  {genre}
-                </span>
-              ))}
+              {anime?.genres?.map((genre) =>
+                // A genre Browse offers links its page, as the served page does.
+                GENRES.includes(genre) ? (
+                  <Link
+                    key={genre}
+                    to={genrePath(genre)}
+                    className="rounded-sm border border-ink/35 bg-gold/5 px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-gold/70 transition-colors hover:border-ink/70 hover:text-crimson"
+                    style={{ fontFamily: 'Outfit, sans-serif' }}
+                  >
+                    {genre}
+                  </Link>
+                ) : (
+                  <span
+                    key={genre}
+                    className="rounded-sm border border-ink/35 bg-gold/5 px-2.5 py-1 text-[10px] font-medium tracking-wider uppercase text-gold/70"
+                    style={{ fontFamily: 'Outfit, sans-serif' }}
+                  >
+                    {genre}
+                  </span>
+                )
+              )}
             </div>
 
             {anime?.description && (

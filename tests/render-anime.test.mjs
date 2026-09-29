@@ -320,3 +320,11 @@ test('an unknown title id is still a real 404', async () => {
 
   assert.equal(res.statusCode, 404);
 });
+
+test('genres link their genre pages; a genre Browse does not offer is named, not linked', async () => {
+  installFetch({ tables: { anime_index: [anime(7, 'Seven', { genres: ['Slice of Life', 'Boys Love'] })], ratings: [] } });
+
+  const root = rootOf((await render(handler, 'route=anime&ref=7-seven')).body);
+
+  assert.match(root, /Genres: <\/dt><dd[^>]*><a href="\/genres\/slice-of-life">Slice of Life<\/a>, Boys Love<\/dd>/);
+});

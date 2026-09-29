@@ -128,3 +128,51 @@ test('a week across the end of daylight saving still has seven different days', 
   const days = groupSchedule([], { now: new Date('2026-10-31T12:00:00Z'), timeZone: 'America/New_York' });
   assert.deepEqual(days.map((d) => d.key), ['2026-10-31', '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-04', '2026-11-05', '2026-11-06']);
 });
+
+test('top rated, a year and a genre ask for what Browse shows for them', () => {
+  const top = hubQuery({ kind: 'top' });
+  assert.match(top, /sort: \[SCORE_DESC\]/);
+  assert.match(top, /p2: Page/);
+  assert.doesNotMatch(top, /p3: Page/);
+  // A year is a start-date range, as Browse's year filter is: seasonYear is
+  // empty for films and specials.
+  const year = hubQuery({ kind: 'year', year: 2025 });
+  assert.match(year, /sort: \[SCORE_DESC\].*startDate_greater: 20249999, startDate_lesser: 20260000/);
+  // And whether each of its seasons has shows.
+  for (const s of ['winter', 'spring', 'summer', 'fall']) {
+    assert.match(year, new RegExp(`${s}: Page\\(page: 1, perPage: 1\\) \\{ media\\([^)]*season: ${s.toUpperCase()}, seasonYear: 2025`));
+  }
+  const genre = hubQuery({ kind: 'genre', genre: 'Slice of Life' });
+  assert.match(genre, /sort: \[POPULARITY_DESC\].*genre_in: \["Slice of Life"\]/);
+});
+
+test('/top links every year from this one back to 1980', () => {
+  const links = readHubLinks({ kind: 'top' }, null, NOW);
+  assert.equal(links.length, 2026 - 1980 + 1);
+  assert.deepEqual(links[0], { label: '2026', path: '/top/2026' });
+  assert.deepEqual(links.at(-1), { label: '1980', path: '/top/1980' });
+});
+
+test('a year links the seasons of it that have shows', () => {
+  const data = { winter: ids(1), spring: ids(), summer: ids(2), fall: ids(3) };
+  assert.deepEqual(readHubLinks({ kind: 'year', year: 2025 }, data, NOW), [
+    { label: 'Winter 2025', path: '/seasons/winter-2025' },
+    { label: 'Summer 2025', path: '/seasons/summer-2025' },
+    { label: 'Fall 2025', path: '/seasons/fall-2025' },
+  ]);
+  assert.deepEqual(readHubLinks({ kind: 'year', year: 2025 }, null, NOW), []);
+});
+
+test('a genre links the other seventeen', () => {
+  const links = readHubLinks({ kind: 'genre', genre: 'Romance' }, null, NOW);
+  assert.equal(links.length, 17);
+  assert.ok(!links.some((l) => l.label === 'Romance'));
+  assert.deepEqual(links.find((l) => l.label === 'Slice of Life'), { label: 'Slice of Life', path: '/genres/slice-of-life' });
+});
+
+test('React asks AniList only for the links it cannot know', () => {
+  assert.match(hubLinksQuery({ kind: 'year', year: 2025 }), /fall: Page/);
+  assert.doesNotMatch(hubLinksQuery({ kind: 'year', year: 2025 }), /p1: Page/);
+  assert.equal(hubLinksQuery({ kind: 'top' }), null);
+  assert.equal(hubLinksQuery({ kind: 'genre', genre: 'Romance' }), null);
+});

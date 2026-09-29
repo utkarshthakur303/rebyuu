@@ -1,5 +1,5 @@
-import { EXCLUDED_GENRES, SEASONS, seasonFromAniList } from './_catalog.js';
-import { hubPreset, parseHubPath, seasonPath, shiftSeason } from './_hubs.js';
+import { EXCLUDED_GENRES, GENRES, SEASONS, seasonFromAniList } from './_catalog.js';
+import { hubPreset, parseHubPath, seasonPath, shiftSeason, genrePath } from './_hubs.js';
 
 /**
  * What a hub page asks AniList, and how the answers are read.
@@ -15,7 +15,7 @@ import { hubPreset, parseHubPath, seasonPath, shiftSeason } from './_hubs.js';
 export const HUB_PAGE_SIZE = 50;
 
 /** Pages of HUB_PAGE_SIZE the served list covers: a whole season, the first 100 otherwise. */
-const SERVED_PAGES = { season: 3, airing: 2, upcoming: 2 };
+const SERVED_PAGES = { season: 3, airing: 2, upcoming: 2, top: 2, year: 2, genre: 2 };
 
 export const servedLimit = (hub) => SERVED_PAGES[hub.kind] * HUB_PAGE_SIZE;
 
@@ -27,6 +27,10 @@ function mediaArgs(hub, sort) {
   if (hub.kind === 'season') args.push(`season: ${hub.season.toUpperCase()}, seasonYear: ${hub.year}`);
   if (hub.kind === 'airing') args.push('status: RELEASING');
   if (hub.kind === 'upcoming') args.push('status: NOT_YET_RELEASED');
+  // A year is a start-date range, as Browse's year filter is: seasonYear is
+  // empty for films, OVAs and specials.
+  if (hub.kind === 'year') args.push(`startDate_greater: ${hub.year * 10000 - 1}, startDate_lesser: ${(hub.year + 1) * 10000}`);
+  if (hub.kind === 'genre') args.push(`genre_in: ${JSON.stringify([hub.genre])}`);
   return args.join(', ');
 }
 
@@ -39,13 +43,15 @@ function listPages(hub) {
   );
 }
 
-/** Whether the seasons either side have any shows: one title each is enough to know. */
+/** Whether a season has any shows: one title is enough to know. */
+const seasonCheck = (alias, season) =>
+  `${alias}: Page(page: 1, perPage: 1) { media(${mediaArgs({ kind: 'season', ...season }, 'popularity')}) { id } }`;
+
+/** The seasons a hub may link: a season's neighbours, a year's four seasons. */
 function neighbourPages(hub) {
-  if (hub.kind !== 'season') return [];
-  return [['prev', -1], ['next', 1]].map(([alias, by]) => {
-    const other = { kind: 'season', ...shiftSeason(hub, by) };
-    return `${alias}: Page(page: 1, perPage: 1) { media(${mediaArgs(other, 'popularity')}) { id } }`;
-  });
+  if (hub.kind === 'season') return [['prev', -1], ['next', 1]].map(([alias, by]) => seasonCheck(alias, shiftSeason(hub, by)));
+  if (hub.kind === 'year') return SEASONS.map((season) => seasonCheck(season.toLowerCase(), { season, year: hub.year }));
+  return [];
 }
 
 const query = (parts) => `query {\n  ${parts.join('\n  ')}\n}`;
@@ -58,7 +64,7 @@ export const hubQuery = (hub) => query([...listPages(hub), ...neighbourPages(hub
  * build (client-side navigation); null for a hub without links.
  */
 export function hubLinksQuery(hub) {
-  if (hub.kind === 'season') return query(neighbourPages(hub));
+  if (hub.kind === 'season' || hub.kind === 'year') return query(neighbourPages(hub));
   if (hub.kind === 'upcoming') return query(listPages(hub));
   return null;
 }
@@ -93,14 +99,29 @@ export const readHubHasMore = (data) => Boolean(data?.p1?.pageInfo?.hasNextPage)
 
 const seasonLink = ({ season, year }) => ({ label: `${season} ${year}`, path: seasonPath({ season, year }) });
 
+/** /top links each year back to this one. Every one has well over enough shows. */
+const FIRST_LINKED_YEAR = 1980;
+
 /**
  * The links above a hub's grid, [{ label, path }]: a season's neighbours
- * that have shows, or the seasons upcoming shows are announced for. Only
- * seasons that have a page are linked, so no link leads to a 404.
+ * that have shows, the seasons upcoming shows are announced for, a year's
+ * seasons with shows, /top's years, a genre's fellow genres. Only pages
+ * that exist are linked, so no link leads to a 404.
  */
 export function readHubLinks(hub, data, now = new Date()) {
+  if (hub.kind === 'top') {
+    return Array.from({ length: now.getUTCFullYear() - FIRST_LINKED_YEAR + 1 }, (_, i) => {
+      const year = now.getUTCFullYear() - i;
+      return { label: String(year), path: `/top/${year}` };
+    });
+  }
+  if (hub.kind === 'genre') return GENRES.filter((g) => g !== hub.genre).map((g) => ({ label: g, path: genrePath(g) }));
   if (!data) return [];
   const hasPage = (season) => parseHubPath(seasonPath(season), now) !== null;
+  if (hub.kind === 'year') {
+    return SEASONS.filter((season) => data[season.toLowerCase()]?.media?.length && hasPage({ season, year: hub.year }))
+      .map((season) => seasonLink({ season, year: hub.year }));
+  }
   if (hub.kind === 'season') {
     return [['prev', -1], ['next', 1]]
       .map(([alias, by]) => ({ alias, season: shiftSeason(hub, by) }))
