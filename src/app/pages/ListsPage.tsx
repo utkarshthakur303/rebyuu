@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext'
 import { supabase } from '@/services/supabase'
 import { toast } from 'sonner'
 import { Link } from 'react-router-dom'
+import { animePath } from '../../../api/_paths.js'
 import { AnimeTitleText } from '@/context/TitleLangContext'
 
 type ListRow = {
@@ -302,7 +303,7 @@ export default function ListsPage() {
                         {items.slice(0, 4).map((item) => (
                           <Link
                             key={item.id}
-                            to={`/anime/${item.anime_id}`}
+                            to={item.anime ? animePath(item.anime) : `/anime/${item.anime_id}`}
                             className="flex items-center gap-3 rounded-md border border-ink/20 bg-background p-3 transition-all hover:bg-accent hover:border-ink/35 group"
                           >
                             {item.anime?.cover_image ? (

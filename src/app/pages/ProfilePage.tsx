@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { Edit2, Save, X, ListPlus, Star, MessageSquare, Trash2 } from 'lucide-react'
 import { motion } from 'motion/react'
 import { Link, useNavigate } from 'react-router-dom'
+import { animePath } from '../../../api/_paths.js'
+import { episodePath } from '../../../api/_episodes.js'
 import { toast } from 'sonner'
 import { CreateListModal } from '@/app/components/CreateListModal'
 import { AnimeTitleText } from '@/context/TitleLangContext'
@@ -346,7 +348,7 @@ export default function ProfilePage() {
                   <div className="space-y-2">
                     {unifiedRatings.map((r) => (
                       <div key={`rating-${r.type}-${r.id}-${r.anime?.id || 'unknown'}-${r.episode_number || ''}`} className="flex items-center gap-3 rounded-md border border-ink/20 bg-background p-3 sm:p-4">
-                        <Link to={r.anime ? `/anime/${r.anime.id}` : '#'} className="flex items-center gap-3 flex-1 min-w-0">
+                        <Link to={r.anime ? (r.type === 'episode' && r.episode_number ? episodePath(r.anime, r.episode_number) : animePath(r.anime)) : '#'} className="flex items-center gap-3 flex-1 min-w-0">
                           {r.anime?.cover_image ? (<img src={r.anime.cover_image} alt={r.anime.title} className="h-16 w-11 rounded-sm object-cover shrink-0 border border-ink/20" />) : (<div className="h-16 w-11 rounded-sm bg-gradient-to-br from-crimson/20 to-ink shrink-0" />)}
                           <div className="flex-1 min-w-0">
                             <p className="truncate font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}><AnimeTitleText anime={r.anime} fallback="Unknown anime" />{r.type === 'episode' && r.episode_number && ` – Ep ${r.episode_number}`}</p>
@@ -371,7 +373,7 @@ export default function ProfilePage() {
                   <div className="space-y-2">
                     {unifiedComments.map((c) => (
                       <div key={`comment-${c.type}-${c.id}-${c.anime?.id || 'unknown'}-${c.episode_number || ''}`} className="flex gap-3 rounded-md border border-ink/20 bg-background p-3 sm:p-4">
-                        <Link to={c.anime ? `/anime/${c.anime.id}` : '#'} className="flex gap-3 flex-1 min-w-0">
+                        <Link to={c.anime ? (c.type === 'episode' && c.episode_number ? episodePath(c.anime, c.episode_number) : animePath(c.anime)) : '#'} className="flex gap-3 flex-1 min-w-0">
                           {c.anime?.cover_image ? (<img src={c.anime.cover_image} alt={c.anime.title} className="h-16 w-11 rounded-sm object-cover shrink-0 border border-ink/20" />) : (<div className="h-16 w-11 rounded-sm bg-gradient-to-br from-crimson/20 to-ink shrink-0" />)}
                           <div className="flex-1 min-w-0">
                             <p className="mb-1 truncate font-medium text-sm text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}><AnimeTitleText anime={c.anime} fallback="Unknown anime" />{c.type === 'episode' && c.episode_number && ` – Ep ${c.episode_number}`}</p>

@@ -26,7 +26,7 @@ export const PAGES = {
     heading: 'About Rebyuu',
     standfirst:
       'An anime discovery and review site built on top of open catalogue data. This page explains exactly which parts are ours and which are borrowed, because that distinction matters more here than on most sites.',
-    updated: '24 August 2026',
+    updated: '28 September 2026',
   },
   terms: {
     path: '/terms',

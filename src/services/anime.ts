@@ -10,6 +10,7 @@ import {
   type RankedEntry,
 } from './anilist';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from '../../api/_related.js';
+import { episodeActivity } from '../../api/_episodes.js';
 
 export interface Anime {
   id: string;
@@ -24,6 +25,21 @@ export interface Anime {
   cover_image: string;
   banner_image: string | null;
   trailer: string | null;
+  /* Detail columns (supabase/title_details_migration.sql). Absent on rows
+     read before that migration runs, so every one is optional. */
+  title_romaji?: string | null;
+  title_english?: string | null;
+  title_native?: string | null;
+  synonyms?: string[];
+  format?: string | null;
+  source?: string | null;
+  duration?: number | null;
+  studios?: string[];
+  mal_id?: number | null;
+  streaming?: { site: string; url: string }[];
+  relations?: { id: string; relation: string; title: string | null; year: number | null; format: string | null }[];
+  next_episode?: number | null;
+  next_episode_at?: string | null;
 }
 
 export interface Review {
@@ -84,6 +100,24 @@ export async function getAnimeList(filters?: {
  * `.maybeSingle()` rather than `.single()`: the latter treats "no rows" as an
  * error, which made a miss indistinguishable from a real failure.
  */
+/**
+ * The row the prerender built this page from, when it is the title being
+ * asked for. api/render.js hands it over in <script id="rebyuu-boot"> so the
+ * detail page's first render has it: no second fetch of the same row, and no
+ * spinner between the served page and React's. Client-side navigation to any
+ * other title finds no match and fetches as before.
+ */
+export function readBootAnime(id: string): Anime | null {
+  if (typeof document === 'undefined' || !id) return null;
+  try {
+    const text = document.getElementById('rebyuu-boot')?.textContent;
+    const data = text ? JSON.parse(text) : null;
+    return data?.anime?.id === id ? (data.anime as Anime) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getAnimeById(id: string): Promise<Anime | null> {
   const { data, error } = await supabase
     .from('anime_index')
@@ -131,12 +165,26 @@ export async function getRelatedAnime(anime: Anime): Promise<Anime[]> {
 }
 
 /**
+ * Which of `ids` exist in the catalogue, with the title and year to link them
+ * by. A title page links a sequel or prequel only when it is here — otherwise
+ * the link would be a 404.
+ */
+export async function getKnownTitles(
+  ids: string[]
+): Promise<Map<string, { id: string; title: string; year: number | null }>> {
+  if (!ids.length) return new Map();
+  const { data, error } = await supabase.from('anime_index').select('id,title,year').in('id', ids);
+  if (error) console.error('Error fetching related titles:', error);
+  return new Map((data || []).map((row) => [row.id, row]));
+}
+
+/**
  * Rebyuu's own community score for a title: the mean of ratings left by
  * Rebyuu accounts, plus how many it is based on.
  *
  * This is the only rating on a title page that is genuinely first-party. The
- * number shown next to it elsewhere is MyAnimeList's aggregate of MyAnimeList
- * users, which is why that one is never marked up as this page's
+ * number shown next to it is AniList's average of AniList users' scores,
+ * which is why that one is never marked up as this page's
  * aggregateRating — presenting another platform's verdict as your own is what
  * review-snippet spam guidance exists to stop. This one can be, because it is
  * ours and because the count is real.
@@ -470,6 +518,20 @@ export interface EpisodeComment {
     username: string;
     avatar_url: string | null;
   };
+}
+
+/**
+ * Comment and rating counts per episode of one title — what decides which
+ * episode pages are indexable (api/_episodes.js).
+ */
+export async function getEpisodeActivity(animeId: string): Promise<Map<number, { comments: number; ratings: number }>> {
+  const [comments, ratings] = await Promise.all([
+    supabase.from('episode_comments').select('episode_number').eq('anime_id', animeId),
+    supabase.from('episode_ratings').select('episode_number').eq('anime_id', animeId),
+  ]);
+  if (comments.error) console.error('Error fetching episode comments:', comments.error);
+  if (ratings.error) console.error('Error fetching episode ratings:', ratings.error);
+  return episodeActivity(comments.data || [], ratings.data || []);
 }
 
 export async function getEpisodeRatings(animeId: string, episodeNumber: number): Promise<EpisodeRating[]> {

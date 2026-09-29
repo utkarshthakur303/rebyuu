@@ -19,23 +19,30 @@ import { useEffect } from 'react';
  * only knows the row is missing after its fetch resolves, and it returns
  * early in that branch. Passing a flag keeps the hook call unconditional
  * and at the top level, which the rules of hooks require.
+ *
+ * The served HTML now always carries a robots tag (the prerender's default is
+ * max-image-preview:large), so this sets the existing tag rather than
+ * deferring to it, and puts its previous value back on unmount. Deferring —
+ * what this hook once did — meant a visitor who opened an indexable page and
+ * then navigated to a noindex one kept the indexable value.
  */
 export function useNoIndex(active: boolean = true) {
   useEffect(() => {
     if (!active) return;
 
-    const existing = document.querySelector('meta[name="robots"]');
-    // Something else already owns the tag — leave it alone rather than
-    // fight over it, and do not remove it on the way out.
-    if (existing) return;
-
-    const meta = document.createElement('meta');
-    meta.name = 'robots';
+    let meta = document.querySelector<HTMLMetaElement>('meta[name="robots"]');
+    const created = !meta;
+    const previous = meta?.content ?? null;
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.name = 'robots';
+      document.head.appendChild(meta);
+    }
     meta.content = 'noindex, follow';
-    document.head.appendChild(meta);
 
     return () => {
-      meta.remove();
+      if (created) meta?.remove();
+      else if (meta && previous != null) meta.content = previous;
     };
   }, [active]);
 }

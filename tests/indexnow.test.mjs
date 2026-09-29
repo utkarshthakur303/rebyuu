@@ -1,7 +1,10 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { changedIds, submitToIndexNow, INDEXNOW_KEY } from '../scripts/indexNow.mjs';
+import { changedIds, planWrite, submitToIndexNow, INDEXNOW_KEY, SYNCED_COLUMNS } from '../scripts/indexNow.mjs';
+import { DETAIL_COLUMNS } from '../scripts/animeRow.mjs';
+
+const DETAILED = [...SYNCED_COLUMNS, ...DETAIL_COLUMNS];
 import { anime } from './helpers.mjs';
 
 const stored = anime(1, 'Show', { rating: 8.5, genres: ['Action', 'Drama'], year: 2024, status: 'airing', episodes: 12 });
@@ -25,8 +28,48 @@ test('a numeric rating read back as a string is not a change', () => {
   assert.deepEqual(changedIds([{ ...stored, rating: '8.5' }], [stored]), []);
 });
 
+test('JSON columns compare by content, whatever order Postgres returns their keys in', () => {
+  // jsonb does not keep key order; the stored copy comes back reordered.
+  const incoming = { ...stored, streaming: [{ site: 'Netflix', url: 'https://n' }], relations: [{ id: 'anilist-2', relation: 'SEQUEL', title: 'S2', year: 2026, format: 'TV' }] };
+  const fromDb = { ...stored, streaming: [{ url: 'https://n', site: 'Netflix' }], relations: [{ year: 2026, format: 'TV', title: 'S2', id: 'anilist-2', relation: 'SEQUEL' }] };
+
+  assert.deepEqual(changedIds([fromDb], [incoming], DETAILED), []);
+  assert.deepEqual(changedIds([fromDb], [{ ...incoming, streaming: [] }], DETAILED), ['anilist-1']);
+});
+
+test('a timestamp read back in Postgres format is not a change', () => {
+  const incoming = { ...stored, next_episode: 5, next_episode_at: '2026-10-03T15:00:00.000Z' };
+  const fromDb = { ...stored, next_episode: 5, next_episode_at: '2026-10-03T15:00:00+00:00' };
+
+  assert.deepEqual(changedIds([fromDb], [incoming], DETAILED), []);
+  assert.deepEqual(changedIds([fromDb], [{ ...incoming, next_episode_at: '2026-10-10T15:00:00.000Z' }], DETAILED), ['anilist-1']);
+});
+
 test('columns the sync does not write are ignored', () => {
   assert.deepEqual(changedIds([{ ...stored, updated_at: 'yesterday' }], [stored]), []);
+});
+
+test('only new or changed rows are written, stamped with when they changed', () => {
+  // Every UPDATE bumps updated_at, which the sitemap publishes as lastmod —
+  // so rewriting an unchanged row would claim a change that never happened.
+  const now = new Date('2026-09-28T03:20:00Z');
+  const incoming = [{ ...stored }, { ...stored, id: 'anilist-2', rating: 9 }, anime(3, 'New')];
+  const existing = [stored, { ...stored, id: 'anilist-2', rating: 8 }];
+
+  const { write, changed } = planWrite(existing, incoming, { now });
+
+  assert.deepEqual(changed, ['anilist-2', 'anilist-3']);
+  assert.deepEqual(write.map((r) => r.id), ['anilist-2', 'anilist-3']);
+  assert.ok(write.every((r) => r.updated_at === now.toISOString()));
+});
+
+test('when the stored rows could not be read, every row is written and none reported', () => {
+  const incoming = [stored, anime(3, 'New')];
+
+  const { write, changed } = planWrite(null, incoming);
+
+  assert.deepEqual(write, incoming);
+  assert.deepEqual(changed, []);
 });
 
 test('the key file served from public/ holds the key being submitted', () => {
@@ -43,10 +86,10 @@ function recorder(status = 200) {
   return { calls, fetchImpl };
 }
 
-test('changed titles are submitted as their page URLs with the site key', async () => {
+test('changed titles are submitted as their canonical page URLs with the site key', async () => {
   const { calls, fetchImpl } = recorder();
 
-  await submitToIndexNow(['anilist-1', 'anilist-2'], { fetchImpl, log: () => {} });
+  await submitToIndexNow(['/anime/1-cowboy-bebop', '/anime/2-show'], { fetchImpl, log: () => {} });
 
   assert.equal(calls.length, 1);
   assert.equal(calls[0].url, 'https://api.indexnow.org/indexnow');
@@ -55,7 +98,7 @@ test('changed titles are submitted as their page URLs with the site key', async 
     host: 'www.rebyuu.app',
     key: INDEXNOW_KEY,
     keyLocation: `https://www.rebyuu.app/${INDEXNOW_KEY}.txt`,
-    urlList: ['https://www.rebyuu.app/anime/anilist-1', 'https://www.rebyuu.app/anime/anilist-2'],
+    urlList: ['https://www.rebyuu.app/anime/1-cowboy-bebop', 'https://www.rebyuu.app/anime/2-show'],
   });
 });
 
@@ -69,9 +112,9 @@ test('nothing is sent when nothing changed', async () => {
 
 test('more than 10,000 URLs are split across requests', async () => {
   const { calls, fetchImpl } = recorder();
-  const ids = Array.from({ length: 10_001 }, (_, i) => `anilist-${i + 1}`);
+  const paths = Array.from({ length: 10_001 }, (_, i) => `/anime/${i + 1}`);
 
-  await submitToIndexNow(ids, { fetchImpl, log: () => {} });
+  await submitToIndexNow(paths, { fetchImpl, log: () => {} });
 
   assert.deepEqual(calls.map((c) => c.body.urlList.length), [10_000, 1]);
 });
@@ -80,8 +123,8 @@ test('a rejected or failed submission is logged, never thrown', async () => {
   const lines = [];
   const failing = async () => { throw new Error('network down'); };
 
-  await submitToIndexNow(['anilist-1'], { fetchImpl: recorder(403).fetchImpl, log: (l) => lines.push(l) });
-  await submitToIndexNow(['anilist-1'], { fetchImpl: failing, log: (l) => lines.push(l) });
+  await submitToIndexNow(['/anime/1'], { fetchImpl: recorder(403).fetchImpl, log: (l) => lines.push(l) });
+  await submitToIndexNow(['/anime/1'], { fetchImpl: failing, log: (l) => lines.push(l) });
 
   assert.equal(lines.length, 2);
   assert.match(lines[0], /403/);

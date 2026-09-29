@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Link } from 'react-router-dom';
+import { animePath } from '../../../api/_paths.js';
 import { Play, X, Plus, Star, Share2 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { getTrendingHeroPool, type Anime } from '@/services/anime';
@@ -217,7 +218,7 @@ export function HeroSection() {
                     // treatment; the underline only appears on hover so the flat
                     // poster look is undisturbed at rest.
                     <Link
-                      to={`/anime/${anime.id}`}
+                      to={animePath(anime)}
                       className="hero-title-link"
                       style={{ color: 'inherit', textDecoration: 'none' }}
                     >
@@ -289,7 +290,7 @@ export function HeroSection() {
                   <div className="relative aspect-[16/10] w-full overflow-hidden bg-black">
                     {anime && (
                       <Link
-                        to={`/anime/${anime.id}`}
+                        to={animePath(anime)}
                         className="group block h-full w-full"
                         aria-label={`Open ${displayTitle}`}
                       >
@@ -388,7 +389,7 @@ export function HeroSection() {
                 </Link>
 
                 <Link
-                  to={`/anime/${anime.id}`}
+                  to={animePath(anime)}
                   className="flex items-center gap-2 px-4 sm:px-6 py-3 hover:opacity-80 transition-opacity"
                   style={{ color: ORANGE }}
                 >
@@ -407,7 +408,7 @@ export function HeroSection() {
                 </Link>
 
                 <Link
-                  to={`/anime/${anime.id}`}
+                  to={animePath(anime)}
                   className="flex items-center gap-2 px-4 sm:px-6 py-3 hover:opacity-80 transition-opacity"
                 >
                   <span

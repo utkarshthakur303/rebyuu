@@ -34,7 +34,7 @@ test('the fallback shell carries the same plain copy, not the old tagline prose'
   // /profile and /lists — so its copy is what a crawler sees then.
   installFetch({ tables: null });
 
-  const { body } = await render(handler, 'route=anime&id=anilist-1');
+  const { body } = await render(handler, 'route=anime&ref=1');
 
   assert.match(titleOf(body), /anime tracker/i);
   assert.doesNotMatch(body, /samurai|sacred|cinematic luxury/i);

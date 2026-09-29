@@ -1,6 +1,7 @@
 import { motion } from 'motion/react';
 import { Star } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
+import { animePath } from '../../../api/_paths.js';
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import type { Anime } from '@/services/anime';
@@ -62,7 +63,7 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
   const handleClick = useCallback((e: React.MouseEvent<HTMLAnchorElement>) => {
     e.preventDefault();
     e.stopPropagation();
-    navigate(`/anime/${anime.id}`, { replace: false });
+    navigate(animePath(anime), { replace: false });
   }, [navigate, anime.id]);
 
   useEffect(() => {
@@ -86,7 +87,7 @@ export function AnimeCard({ anime, index }: AnimeCardProps) {
         onMouseLeave={typeof window !== 'undefined' && 'ontouchstart' in window ? undefined : handleMouseLeave}
       >
         <Link 
-          to={`/anime/${anime.id}`} 
+          to={animePath(anime)} 
           onClick={handleClick}
           className="block h-full cursor-pointer"
         >

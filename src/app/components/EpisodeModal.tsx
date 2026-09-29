@@ -12,9 +12,13 @@ interface EpisodeModalProps {
   animeId: string;
   episodeNumber: number;
   animeTitle: string;
+  /** 'page' renders the panel inline, for the episode's own page. */
+  variant?: 'modal' | 'page';
+  /** Called after a rating or comment is saved or deleted. */
+  onChange?: () => void;
 }
 
-export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTitle }: EpisodeModalProps) {
+export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTitle, variant = 'modal', onChange }: EpisodeModalProps) {
   const { user } = useAuth();
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState('');
@@ -91,6 +95,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
       if (data) {
         setUserEpisodeRating({ id: data.id, rating: data.rating });
         toast.success('Rating saved');
+        onChange?.();
       }
     } catch (error) {
       console.error('Error submitting rating:', error);
@@ -131,6 +136,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
       setComment('');
       await loadData();
       toast.success('Comment posted');
+      onChange?.();
     } catch (error) {
       if (!import.meta.env.PROD) {
         console.error('Error submitting comment:', error);
@@ -140,6 +146,232 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
       setSubmitting(false);
     }
   };
+
+  /* The rating form, the comment form and the comments. The modal wraps it
+     in an overlay; the episode page renders it inline. */
+  const body = (
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
+      {user && (
+        <>
+          <div>
+            <label className="mb-2 sm:mb-3 block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
+              Rate this episode
+            </label>
+            <div className="flex flex-wrap gap-1.5 sm:gap-2">
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
+                <button
+                  key={r}
+                  type="button"
+                  onClick={() => setRating(r)}
+                  className={`flex h-10 w-10 items-center justify-center rounded-md border text-sm transition-all min-h-[44px] min-w-[44px] ${
+                    rating >= r
+                      ? 'border-crimson bg-crimson text-ink'
+                      : 'border-ink/20 bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
+                  }`}
+                  style={{ fontFamily: 'Outfit, sans-serif' }}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 flex items-center gap-2">
+              {rating > 0 && (
+                <>
+                  <button
+                    onClick={handleSubmitRating}
+                    disabled={submitting}
+                    className="btn-imperial min-h-[40px] py-2 px-4 text-xs disabled:opacity-50"
+                  >
+                    {submitting ? 'Saving...' : 'Save Rating'}
+                  </button>
+                  {user && userEpisodeRating && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Delete your rating?')) return;
+                        
+                        setDeletingRating(true);
+                        try {
+                          const { error, count } = await supabase
+                            .from('episode_ratings')
+                            .delete()
+                            .eq('id', userEpisodeRating.id)
+                            .eq('user_id', user.id)
+                            .select('id', { count: 'exact' });
+                          
+                          if (error) {
+                            console.error('Delete episode rating error:', error);
+                            toast.error(error.message || 'Failed to delete rating');
+                            setDeletingRating(false);
+                            return;
+                          }
+                          
+                          if (count !== undefined && count === 0) {
+                            console.error('Delete episode rating: No rows affected');
+                            toast.error('Rating not found or already deleted');
+                            setDeletingRating(false);
+                            return;
+                          }
+                          
+                          setRating(0);
+                          setUserEpisodeRating(null);
+                          toast.success('Rating deleted');
+                          onChange?.();
+                          setDeletingRating(false);
+                        } catch (err) {
+                          console.error('Delete episode rating exception:', err);
+                          toast.error('Failed to delete rating');
+                          setDeletingRating(false);
+                        }
+                      }}
+                      disabled={deletingRating}
+                      className="rounded-md p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                    >
+                      {deletingRating ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmitComment} className="space-y-3">
+            <label className="block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
+              Add a comment
+            </label>
+            <textarea
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder="Share your thoughts about this episode..."
+              rows={3}
+              className="input-imperial resize-none"
+              style={{ fontSize: '16px' }}
+            />
+            <button
+              type="submit"
+              disabled={!comment.trim() || submitting}
+              className="btn-imperial w-full sm:w-auto min-h-[44px] disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              {submitting ? 'Posting...' : 'Post Comment'}
+            </button>
+          </form>
+        </>
+      )}
+
+      {!user && (
+        <div className="rounded-md border border-ink/20 bg-card p-4 text-center">
+          <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
+            Enter the archive to rate and comment on episodes
+          </p>
+        </div>
+      )}
+
+      <div>
+        <div className="mb-4 flex items-center gap-2">
+          <MessageSquare className="h-4 w-4 text-crimson" />
+          <h3 className="text-base text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
+            Comments ({comments.length})
+          </h3>
+        </div>
+        {loading ? (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="space-y-2">
+                <div className="h-4 w-3/4 skeleton-imperial" />
+                <div className="h-4 w-1/2 skeleton-imperial" />
+              </div>
+            ))}
+          </div>
+        ) : comments.length === 0 ? (
+          <p className="text-center text-sm text-muted-foreground py-8" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
+            No comments yet. Be the first to comment!
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {comments.map((c) => (
+              <div key={c.id} className="rounded-md border border-ink/20 bg-card p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {c.user.avatar_url ? (
+                      <img
+                        src={c.user.avatar_url}
+                        alt={c.user.username}
+                        className="h-8 w-8 rounded-full object-cover border border-ink/20"
+                      />
+                    ) : (
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-orange/70">
+                        {c.user.username.charAt(0)}
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-sm font-medium text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.user.username}</p>
+                      <p className="text-[10px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                        {new Date(c.created_at).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                  {user && c.user_id === user.id && (
+                    <button
+                      onClick={async () => {
+                        if (!confirm('Delete this comment?')) return;
+                        
+                        setDeletingComment(c.id);
+                        try {
+                          const { data, error, count } = await supabase
+                            .from('episode_comments')
+                            .delete()
+                            .eq('id', c.id)
+                            .eq('user_id', user.id)
+                            .select('id', { count: 'exact' });
+                          
+                          if (error) {
+                            console.error('Delete episode comment error:', error);
+                            toast.error(error.message || 'Failed to delete comment');
+                            setDeletingComment(null);
+                            return;
+                          }
+                          
+                          if (count !== undefined && count === 0) {
+                            console.error('Delete episode comment: No rows affected');
+                            toast.error('Comment not found or already deleted');
+                            setDeletingComment(null);
+                            return;
+                          }
+                          
+                          setComments((prev) => prev.filter((comment) => comment.id !== c.id));
+                          toast.success('Comment deleted');
+                          onChange?.();
+                          setDeletingComment(null);
+                        } catch (err) {
+                          console.error('Delete episode comment exception:', err);
+                          toast.error('Failed to delete comment');
+                          setDeletingComment(null);
+                        }
+                      }}
+                      disabled={deletingComment === c.id}
+                      className="rounded-md p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
+                    >
+                      {deletingComment === c.id ? (
+                        <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
+                      ) : (
+                        <Trash2 className="h-4 w-4" />
+                      )}
+                    </button>
+                  )}
+                </div>
+                <p className="text-sm text-foreground/80" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.content}</p>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+
+  if (variant === 'page') return body;
 
   return (
     <AnimatePresence>
@@ -173,223 +405,7 @@ export function EpisodeModal({ isOpen, onClose, animeId, episodeNumber, animeTit
               </button>
             </div>
 
-            <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-              {user && (
-                <>
-                  <div>
-                    <label className="mb-2 sm:mb-3 block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                      Rate this episode
-                    </label>
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                      {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((r) => (
-                        <button
-                          key={r}
-                          type="button"
-                          onClick={() => setRating(r)}
-                          className={`flex h-10 w-10 items-center justify-center rounded-md border text-sm transition-all min-h-[44px] min-w-[44px] ${
-                            rating >= r
-                              ? 'border-crimson bg-crimson text-ink'
-                              : 'border-ink/20 bg-transparent text-muted-foreground hover:bg-accent active:bg-accent'
-                          }`}
-                          style={{ fontFamily: 'Outfit, sans-serif' }}
-                        >
-                          {r}
-                        </button>
-                      ))}
-                    </div>
-                    <div className="mt-3 flex items-center gap-2">
-                      {rating > 0 && (
-                        <>
-                          <button
-                            onClick={handleSubmitRating}
-                            disabled={submitting}
-                            className="btn-imperial min-h-[40px] py-2 px-4 text-xs disabled:opacity-50"
-                          >
-                            {submitting ? 'Saving...' : 'Save Rating'}
-                          </button>
-                          {user && userEpisodeRating && (
-                            <button
-                              onClick={async () => {
-                                if (!confirm('Delete your rating?')) return;
-                                
-                                setDeletingRating(true);
-                                try {
-                                  const { error, count } = await supabase
-                                    .from('episode_ratings')
-                                    .delete()
-                                    .eq('id', userEpisodeRating.id)
-                                    .eq('user_id', user.id)
-                                    .select('id', { count: 'exact' });
-                                  
-                                  if (error) {
-                                    console.error('Delete episode rating error:', error);
-                                    toast.error(error.message || 'Failed to delete rating');
-                                    setDeletingRating(false);
-                                    return;
-                                  }
-                                  
-                                  if (count !== undefined && count === 0) {
-                                    console.error('Delete episode rating: No rows affected');
-                                    toast.error('Rating not found or already deleted');
-                                    setDeletingRating(false);
-                                    return;
-                                  }
-                                  
-                                  setRating(0);
-                                  setUserEpisodeRating(null);
-                                  toast.success('Rating deleted');
-                                  setDeletingRating(false);
-                                } catch (err) {
-                                  console.error('Delete episode rating exception:', err);
-                                  toast.error('Failed to delete rating');
-                                  setDeletingRating(false);
-                                }
-                              }}
-                              disabled={deletingRating}
-                              className="rounded-md p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                            >
-                              {deletingRating ? (
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </button>
-                          )}
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <form onSubmit={handleSubmitComment} className="space-y-3">
-                    <label className="block text-xs font-medium tracking-wider uppercase text-foreground/60" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                      Add a comment
-                    </label>
-                    <textarea
-                      value={comment}
-                      onChange={(e) => setComment(e.target.value)}
-                      placeholder="Share your thoughts about this episode..."
-                      rows={3}
-                      className="input-imperial resize-none"
-                      style={{ fontSize: '16px' }}
-                    />
-                    <button
-                      type="submit"
-                      disabled={!comment.trim() || submitting}
-                      className="btn-imperial w-full sm:w-auto min-h-[44px] disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      {submitting ? 'Posting...' : 'Post Comment'}
-                    </button>
-                  </form>
-                </>
-              )}
-
-              {!user && (
-                <div className="rounded-md border border-ink/20 bg-card p-4 text-center">
-                  <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
-                    Enter the archive to rate and comment on episodes
-                  </p>
-                </div>
-              )}
-
-              <div>
-                <div className="mb-4 flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4 text-crimson" />
-                  <h3 className="text-base text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
-                    Comments ({comments.length})
-                  </h3>
-                </div>
-                {loading ? (
-                  <div className="space-y-4">
-                    {Array.from({ length: 3 }).map((_, i) => (
-                      <div key={i} className="space-y-2">
-                        <div className="h-4 w-3/4 skeleton-imperial" />
-                        <div className="h-4 w-1/2 skeleton-imperial" />
-                      </div>
-                    ))}
-                  </div>
-                ) : comments.length === 0 ? (
-                  <p className="text-center text-sm text-muted-foreground py-8" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
-                    No comments yet. Be the first to comment!
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {comments.map((c) => (
-                      <div key={c.id} className="rounded-md border border-ink/20 bg-card p-4">
-                        <div className="mb-2 flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                            {c.user.avatar_url ? (
-                              <img
-                                src={c.user.avatar_url}
-                                alt={c.user.username}
-                                className="h-8 w-8 rounded-full object-cover border border-ink/20"
-                              />
-                            ) : (
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-crimson/10 text-[10px] font-bold text-crimson border border-orange/70">
-                                {c.user.username.charAt(0)}
-                              </div>
-                            )}
-                            <div>
-                              <p className="text-sm font-medium text-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.user.username}</p>
-                              <p className="text-[10px] text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
-                                {new Date(c.created_at).toLocaleDateString()}
-                              </p>
-                            </div>
-                          </div>
-                          {user && c.user_id === user.id && (
-                            <button
-                              onClick={async () => {
-                                if (!confirm('Delete this comment?')) return;
-                                
-                                setDeletingComment(c.id);
-                                try {
-                                  const { data, error, count } = await supabase
-                                    .from('episode_comments')
-                                    .delete()
-                                    .eq('id', c.id)
-                                    .eq('user_id', user.id)
-                                    .select('id', { count: 'exact' });
-                                  
-                                  if (error) {
-                                    console.error('Delete episode comment error:', error);
-                                    toast.error(error.message || 'Failed to delete comment');
-                                    setDeletingComment(null);
-                                    return;
-                                  }
-                                  
-                                  if (count !== undefined && count === 0) {
-                                    console.error('Delete episode comment: No rows affected');
-                                    toast.error('Comment not found or already deleted');
-                                    setDeletingComment(null);
-                                    return;
-                                  }
-                                  
-                                  setComments((prev) => prev.filter((comment) => comment.id !== c.id));
-                                  toast.success('Comment deleted');
-                                  setDeletingComment(null);
-                                } catch (err) {
-                                  console.error('Delete episode comment exception:', err);
-                                  toast.error('Failed to delete comment');
-                                  setDeletingComment(null);
-                                }
-                              }}
-                              disabled={deletingComment === c.id}
-                              className="rounded-md p-2 text-destructive hover:bg-destructive/10 transition-colors disabled:opacity-50"
-                            >
-                              {deletingComment === c.id ? (
-                                <div className="h-4 w-4 animate-spin rounded-full border-2 border-destructive border-t-transparent" />
-                              ) : (
-                                <Trash2 className="h-4 w-4" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                        <p className="text-sm text-foreground/80" style={{ fontFamily: 'Outfit, sans-serif' }}>{c.content}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
+            {body}
           </motion.div>
         </>
       )}

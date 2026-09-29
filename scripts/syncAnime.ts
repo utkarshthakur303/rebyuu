@@ -2,9 +2,15 @@ import dotenv from "dotenv";
 dotenv.config({ path: ".env" });
 import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
-import { changedIds, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
+import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
+import { toRow, DETAIL_COLUMNS } from './animeRow.mjs';
+import { animePath } from '../api/_paths.js';
 const ANILIST_API = 'https://graphql.anilist.co';
 
+// The detail fields (names, studio, streaming links, next episode, relations)
+// are fetched on every run; they are only written once the migration that adds
+// their columns has run. Measured on a live 50-title page: ~1.6 s, ~150-200 KB,
+// well inside AniList's complexity limit.
 const ANILIST_QUERY = `
   query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus) {
     Page(page: $page, perPage: $perPage) {
@@ -15,10 +21,16 @@ const ANILIST_QUERY = `
       }
       media(type: ANIME, sort: $sort, status: $status, isAdult: false) {
         id
+        idMal
         title {
           romaji
           english
+          native
         }
+        synonyms
+        format
+        source
+        duration
         averageScore
         genres
         startDate {
@@ -36,56 +48,56 @@ const ANILIST_QUERY = `
           id
           site
         }
+        studios(isMain: true) {
+          nodes { name }
+        }
+        externalLinks {
+          site
+          url
+          type
+        }
+        nextAiringEpisode {
+          airingAt
+          episode
+        }
+        relations {
+          edges {
+            relationType
+            node {
+              id
+              type
+              format
+              title { romaji english }
+              startDate { year }
+            }
+          }
+        }
       }
     }
   }
 `;
 
-type AniListMedia = {
-  id: number;
-  title: {
-    romaji: string;
-    english: string | null;
-  };
-  averageScore: number | null;
-  genres: string[];
-  startDate: {
-    year: number | null;
-  };
-  season: string | null;
-  status: string;
-  episodes: number | null;
-  description: string | null;
-  coverImage: {
-    large: string;
-  };
-  bannerImage: string | null;
-  trailer: {
-    id: string | null;
-    site: string | null;
-  } | null;
-};
+/** An AniList Media record; animeRow.mjs owns its shape. */
+type AniListMedia = { id: number } & Record<string, unknown>;
 
-function mapStatus(status: string): 'airing' | 'completed' | 'upcoming' {
-  const statusMap: Record<string, 'airing' | 'completed' | 'upcoming'> = {
-    'RELEASING': 'airing',
-    'FINISHED': 'completed',
-    'NOT_YET_RELEASED': 'upcoming',
-    'CANCELLED': 'completed',
-    'HIATUS': 'airing'
-  };
-  return statusMap[status] || 'completed';
+/** Which columns this run writes, decided once from the live schema. */
+interface Schema {
+  details: boolean;
+  columns: string[];
 }
 
-function mapSeason(season: string | null): string | null {
-  if (!season) return null;
-  const seasonMap: Record<string, string> = {
-    'WINTER': 'Winter',
-    'SPRING': 'Spring',
-    'SUMMER': 'Summer',
-    'FALL': 'Fall'
-  };
-  return seasonMap[season] || null;
+/**
+ * The detail columns exist only once supabase/title_details_migration.sql has
+ * been run. Until then the sync keeps writing the original columns, so
+ * deploying this before the migration changes nothing.
+ */
+async function detectSchema(supabase: ReturnType<typeof createClient>): Promise<Schema> {
+  const { error } = await supabase.from('anime_index').select(DETAIL_COLUMNS.join(',')).limit(1);
+  if (error) {
+    console.log(`Detail columns not found (${error.message}). Writing base columns only — run supabase/title_details_migration.sql to enable them.`);
+    return { details: false, columns: SYNCED_COLUMNS };
+  }
+  return { details: true, columns: [...SYNCED_COLUMNS, ...DETAIL_COLUMNS] };
 }
 
 type AniListSort = 'POPULARITY_DESC' | 'TRENDING_DESC' | 'START_DATE_DESC';
@@ -144,53 +156,36 @@ async function fetchAniListPage(
   throw new Error('AniList rate limit not cleared after 5 attempts');
 }
 
-/** Upserts one page of titles. Returns the ids whose stored row it actually changed. */
+/** Upserts one page of titles. Returns the page paths of the titles it actually changed. */
 async function syncAnimeToSupabase(
   supabase: ReturnType<typeof createClient>,
-  media: AniListMedia[]
+  media: AniListMedia[],
+  schema: Schema
 ): Promise<string[]> {
-  const animeData = media.map((m) => {
-    const title = m.title.english || m.title.romaji;
-    const trailerUrl = m.trailer?.site === 'youtube' && m.trailer?.id
-      ? `https://www.youtube.com/watch?v=${m.trailer.id}`
-      : null;
+  const animeData = media.map((m) => toRow(m, { details: schema.details }));
 
-    return {
-      id: `anilist-${m.id}`,
-      title,
-      rating: m.averageScore ? m.averageScore / 10 : null,
-      genres: m.genres,
-      year: m.startDate.year,
-      season: mapSeason(m.season),
-      status: mapStatus(m.status),
-      episodes: m.episodes,
-      description: m.description?.replace(/<[^>]*>/g, '').substring(0, 1000) || null,
-      cover_image: m.coverImage.large,
-      banner_image: m.bannerImage,
-      trailer: trailerUrl,
-      anilist_id: m.id
-    };
-  });
-
-  // Read the rows as they stand before the upsert overwrites them, so the
-  // IndexNow submission can be limited to titles that really changed. If the
-  // read fails, report nothing rather than every row as changed.
+  // Read the rows as they stand, so only titles that really changed are
+  // written (keeping updated_at, and so the sitemap's lastmod, truthful) and
+  // submitted to IndexNow. See planWrite.
   const { data: existing, error: readError } = await supabase
     .from('anime_index')
-    .select(['id', ...SYNCED_COLUMNS].join(','))
+    .select(['id', ...schema.columns].join(','))
     .in('id', animeData.map((a) => a.id));
-  const changed = readError ? [] : changedIds(existing ?? [], animeData);
+  if (readError) console.error(`  could not read stored rows, writing all: ${readError.message}`);
+  const { write, changed } = planWrite(readError ? null : existing ?? [], animeData, { columns: schema.columns });
 
-  const { error } = await supabase.from('anime_index').upsert(animeData, {
-    onConflict: 'id',
-    ignoreDuplicates: false
-  });
+  if (write.length) {
+    const { error } = await supabase.from('anime_index').upsert(write, {
+      onConflict: 'id',
+      ignoreDuplicates: false
+    });
 
-  if (error) {
-    throw new Error(`Supabase upsert error: ${error.message}`);
+    if (error) {
+      throw new Error(`Supabase upsert error: ${error.message}`);
+    }
   }
 
-  return changed;
+  return animeData.filter((row) => changed.includes(row.id)).map((row) => animePath(row));
 }
 
 interface Pass {
@@ -223,6 +218,7 @@ const FULL_PASSES: Pass[] = [
 async function runPass(
   supabase: ReturnType<typeof createClient>,
   pass: Pass,
+  schema: Schema,
   changed: Set<string>
 ): Promise<number> {
   console.log(`\n── pass: ${pass.label} (${pass.sort}${pass.status ? ' / ' + pass.status : ''}) ──`);
@@ -233,7 +229,7 @@ async function runPass(
       const { data, hasNextPage } = await fetchAniListPage(page, 50, pass.sort, pass.status);
       if (!data.length) break;
 
-      for (const id of await syncAnimeToSupabase(supabase, data)) changed.add(id);
+      for (const path of await syncAnimeToSupabase(supabase, data, schema)) changed.add(path);
       synced += data.length;
       console.log(`  page ${page}: +${data.length} (pass total ${synced})`);
 
@@ -262,18 +258,20 @@ async function syncAnime() {
   const passes = mode === 'full' ? FULL_PASSES : FRESH_PASSES;
 
   console.log(`Starting AniList sync (mode=${mode})...`);
+  const schema = await detectSchema(supabase);
   const started = Date.now();
   let total = 0;
   const changed = new Set<string>();
 
   for (const pass of passes) {
-    total += await runPass(supabase, pass, changed);
+    total += await runPass(supabase, pass, schema, changed);
     await sleep(REQUEST_INTERVAL_MS);
   }
 
   const mins = ((Date.now() - started) / 60000).toFixed(1);
-  // Rows overlap between passes, so this counts upserts, not distinct titles.
-  console.log(`\nSync complete in ${mins} min. Rows upserted: ${total}. Titles changed: ${changed.size}`);
+  // Rows overlap between passes, so "checked" counts rows fetched, not
+  // distinct titles. Only the changed ones were written.
+  console.log(`\nSync complete in ${mins} min. Rows checked: ${total}. Titles changed and written: ${changed.size}`);
 
   await submitToIndexNow([...changed]);
 }

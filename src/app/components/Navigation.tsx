@@ -1,4 +1,5 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { animePath } from '../../../api/_paths.js';
 import { Search, Home, Grid3x3, User, LogIn, Shield, List, Menu, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useEffect, useState, useRef, useCallback, memo } from 'react';
@@ -350,7 +351,7 @@ export function Navigation() {
       setSuggestions([]);
       setActiveIndex(-1);
       setMobileSearchOpen(false);
-      navigate(`/anime/${anime.id}`);
+      navigate(animePath(anime));
     },
     [navigate]
   );

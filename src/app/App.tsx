@@ -29,6 +29,7 @@ const ListsPage = lazy(() => import('@/app/pages/ListsPage'));
 const AboutPage = lazy(() => import('@/app/pages/AboutPage'));
 const TermsPage = lazy(() => import('@/app/pages/TermsPage'));
 const PrivacyPage = lazy(() => import('@/app/pages/PrivacyPage'));
+const EpisodePage = lazy(() => import('@/app/pages/EpisodePage'));
 import NotFoundPage from '@/app/pages/NotFoundPage';
 import ProtectedRoute from '@/app/components/ProtectedRoute';
 import AdminRoute from '@/app/components/AdminRoute';
@@ -75,6 +76,7 @@ export default function App() {
               <Route path="/" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
               <Route path="/browse" element={<ErrorBoundary><BrowsePage /></ErrorBoundary>} />
               <Route path="/anime/:id" element={<ErrorBoundary><AnimeDetailPage /></ErrorBoundary>} />
+              <Route path="/anime/:id/episode/:ep" element={<ErrorBoundary><EpisodePage /></ErrorBoundary>} />
               <Route path="/profile" element={<ErrorBoundary><ProtectedRoute><ProfilePage /></ProtectedRoute></ErrorBoundary>} />
               <Route path="/lists" element={<ErrorBoundary><ProtectedRoute><ListsPage /></ProtectedRoute></ErrorBoundary>} />
               <Route path="/login" element={<ErrorBoundary><LoginPage /></ErrorBoundary>} />

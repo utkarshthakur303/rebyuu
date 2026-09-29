@@ -49,25 +49,68 @@ function coerce(value, sample) {
   return typeof sample === 'number' ? Number(value) : value;
 }
 
-function applyFilter(rows, column, expr) {
+/** PostgREST `like` pattern ("*" or "%" = any run, "_" = one char) as a RegExp. */
+function likeToRegExp(pattern) {
+  const body = pattern
+    .split('')
+    .map((c) => (c === '*' || c === '%' ? '.*' : c === '_' ? '.' : c.replace(/[.+?^${}()|[\]\\]/g, '\\$&')))
+    .join('');
+  return new RegExp(`^${body}$`, 's');
+}
+
+/** Does `row` satisfy `column=op.arg`? */
+function matches(row, column, expr) {
   const dot = expr.indexOf('.');
   const op = expr.slice(0, dot);
   const arg = expr.slice(dot + 1);
-  return rows.filter((row) => {
-    const v = row[column];
-    switch (op) {
-      case 'eq': return v != null && String(v) === arg;
-      case 'neq': return v == null || String(v) !== arg;
-      case 'in': return parseList(arg).includes(String(v));
-      case 'gte': return v != null && v >= coerce(arg, v);
-      case 'lte': return v != null && v <= coerce(arg, v);
-      case 'ov': {
-        const wanted = parseList(arg);
-        return Array.isArray(v) && v.some((g) => wanted.includes(g));
-      }
-      default: throw new Error(`fake PostgREST: unsupported operator ${op}`);
+  const v = row[column];
+  switch (op) {
+    case 'eq': return v != null && String(v) === arg;
+    case 'neq': return v == null || String(v) !== arg;
+    case 'in': return parseList(arg).includes(String(v));
+    case 'gte': return v != null && v >= coerce(arg, v);
+    case 'gt': return v != null && v > coerce(arg, v);
+    case 'lte': return v != null && v <= coerce(arg, v);
+    case 'lt': return v != null && v < coerce(arg, v);
+    case 'is': return arg === 'null' ? v == null : String(v) === arg;
+    case 'not': return !matches(row, column, arg);
+    case 'like': return v != null && likeToRegExp(arg).test(String(v));
+    case 'ov': {
+      const wanted = parseList(arg);
+      return Array.isArray(v) && v.some((g) => wanted.includes(g));
     }
-  });
+    default: throw new Error(`fake PostgREST: unsupported operator ${op}`);
+  }
+}
+
+/** Splits "a,and(b,c),d" at top-level commas. */
+function splitTop(list) {
+  const parts = [];
+  let depth = 0;
+  let cur = '';
+  for (const ch of list) {
+    if (ch === '(') depth++;
+    if (ch === ')') depth--;
+    if (ch === ',' && depth === 0) { parts.push(cur); cur = ''; } else cur += ch;
+  }
+  if (cur) parts.push(cur);
+  return parts;
+}
+
+/** Evaluates a logic-tree term: "and(x.eq.1,y.gt.2)", "or(...)" or "col.op.arg". */
+function evalTerm(row, term) {
+  const group = term.match(/^(and|or)\((.*)\)$/s);
+  if (group) {
+    const terms = splitTop(group[2]);
+    return group[1] === 'and' ? terms.every((t) => evalTerm(row, t)) : terms.some((t) => evalTerm(row, t));
+  }
+  const dot = term.indexOf('.');
+  return matches(row, term.slice(0, dot), term.slice(dot + 1));
+}
+
+function applyFilter(rows, column, expr) {
+  if (column === 'or' || column === 'and') return rows.filter((row) => evalTerm(row, `${column}${expr}`));
+  return rows.filter((row) => matches(row, column, expr));
 }
 
 function compareBy(term) {
@@ -95,22 +138,36 @@ function applyOrder(rows, spec) {
   });
 }
 
-/** Evaluates one PostgREST GET against `tables`. */
-function postgrest(tables, url) {
+/** Evaluates one PostgREST GET against `tables`. Returns { rows, total }. */
+function postgrest(tables, url, missingColumns) {
   const table = url.pathname.replace('/rest/v1/', '');
   let rows = tables[table];
   if (!rows) throw new Error(`fake PostgREST: no fixture table ${table}`);
   let order = null;
   let limit = null;
+  let select = null;
   for (const [key, value] of url.searchParams) {
-    if (key === 'select') continue;
-    if (key === 'order') order = value;
+    if (key === 'select') select = value;
+    else if (key === 'order') order = value;
     else if (key === 'limit') limit = Number(value);
     else rows = applyFilter(rows, key, value);
   }
+  const columns = select && select !== '*' ? splitTop(select) : null;
+  const filtered = [...url.searchParams.keys()].filter((k) => !['select', 'order', 'limit', 'or', 'and'].includes(k));
+  const missing = [...(columns || []), ...filtered].filter((c) => missingColumns.has(c));
+  if (missing.length) {
+    const err = new Error(`column anime_index.${missing[0]} does not exist`);
+    err.status = 400;
+    err.code = '42703';
+    throw err;
+  }
   if (order) rows = applyOrder(rows, order);
+  const total = rows.length;
   if (limit != null) rows = rows.slice(0, limit);
-  return rows;
+  if (columns && columns.every((c) => /^\w+$/.test(c))) {
+    rows = rows.map((row) => Object.fromEntries(columns.map((c) => [c, row[c] ?? null])));
+  }
+  return { rows, total };
 }
 
 const json = (body, status = 200) =>
@@ -119,25 +176,48 @@ const json = (body, status = 200) =>
 /**
  * Installs a fake global fetch.
  *
- *   tables   — { anime_index: [...], ratings: [...] }, or null to simulate a
- *              Supabase outage (every request fails).
- *   anilist  — the `data` object an AniList GraphQL request resolves to, or
- *              null to simulate AniList being down.
+ *   tables          — { anime_index: [...], ratings: [...] }, or null to
+ *                     simulate a Supabase outage (every request fails).
+ *   anilist         — the `data` object an AniList GraphQL request resolves
+ *                     to, or null to simulate AniList being down.
+ *   missingColumns  — columns the database does not have yet; selecting one
+ *                     fails the way PostgREST does before a migration runs.
  *
- * Returns the list of requests made, for the few tests that care.
+ * Honours `Range: from-to` and `Prefer: count=exact` (Content-Range header),
+ * as PostgREST does. Returns the list of requests made.
  */
-export function installFetch({ tables = { anime_index: [], ratings: [] }, anilist = null } = {}) {
+export function installFetch({ tables = { anime_index: [], ratings: [] }, anilist = null, missingColumns = [] } = {}) {
   const calls = [];
+  const missing = new Set(missingColumns);
   globalThis.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === 'string' ? input : input.url);
     calls.push({ url, init });
     if (url.origin === SUPABASE_URL) {
       if (!tables) return json({ message: 'down' }, 503);
-      return json(postgrest(tables, url));
+      let result;
+      try {
+        result = postgrest(tables, url, missing);
+      } catch (err) {
+        if (err.status) return json({ code: err.code, message: err.message }, err.status);
+        throw err;
+      }
+      const headers = new Headers(init.headers || {});
+      let { rows } = result;
+      let from = 0;
+      const range = headers.get('Range')?.match(/^(\d+)-(\d+)$/);
+      if (range) {
+        from = Number(range[1]);
+        rows = rows.slice(from, Number(range[2]) + 1);
+      }
+      const res = json(rows);
+      if (/count=exact/.test(headers.get('Prefer') || '')) {
+        res.headers.set('Content-Range', `${rows.length ? `${from}-${from + rows.length - 1}` : '*'}/${result.total}`);
+      }
+      return res;
     }
     if (url.hostname === 'graphql.anilist.co') {
       if (!anilist) return json({ errors: [{ message: 'down' }] }, 500);
-      return json({ data: anilist });
+      return json({ data: typeof anilist === 'function' ? anilist(JSON.parse(init.body)) : anilist });
     }
     throw new Error(`unexpected fetch to ${url}`);
   };
@@ -167,9 +247,9 @@ export function rootOf(html) {
   return html.slice(start, end);
 }
 
-/** hrefs of every /anime/ link inside `html`, in document order. */
+/** Title-page links inside `html`, as anime_index ids, in document order. */
 export function animeLinks(html) {
-  return [...html.matchAll(/href="\/anime\/(anilist-\d+)"/g)].map((m) => m[1]);
+  return [...html.matchAll(/href="\/anime\/(\d+)(?:-[a-z0-9-]*)?"/g)].map((m) => `anilist-${m[1]}`);
 }
 
 /** The slice of `html` from the heading containing `label` to the next <h2>. */

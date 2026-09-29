@@ -1,32 +1,46 @@
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { readBootAnime, getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, getKnownTitles, getEpisodeActivity, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { ExtraFacts, WhereToWatch, NextEpisode, QuickAnswers, RelatedSeasons } from '@/app/components/TitleDetails';
 import { AnimeCard } from '@/app/components/AnimeCard';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/services/supabase';
-import { EpisodeModal } from '@/app/components/EpisodeModal';
 import ListPickerModal from '@/app/components/ListPickerModal';
 import { toast } from 'sonner';
 import { useNoIndex } from '@/utils/useNoIndex';
 import { useAnimeTitle } from '@/context/TitleLangContext';
+import { useSeo } from '@/utils/useSeo';
+import { titleTag, metaDescription, otherNames, nameLang } from '../../../api/_titlepage.js';
+import { animePath, parseAnimeRef } from '../../../api/_paths.js';
+import { lastEpisode, episodePath, isEpisodeIndexable } from '../../../api/_episodes.js';
+import { nextEpisode } from '../../../api/_titlepage.js';
 
 export default function AnimeDetailPage() {
-  const { id } = useParams();
+  // The URL carries "154587-frieren-…" (or an older form); the row id is anilist-154587.
+  const { id: ref = '' } = useParams();
+  const id = parseAnimeRef(ref)?.id ?? '';
+  const location = useLocation();
   const { user } = useAuth();
-  const [anime, setAnime] = useState<Anime | null>(null);
+  // On a served title page the row is already in the HTML (readBootAnime).
+  const [boot] = useState(() => readBootAnime(id));
+  const [anime, setAnime] = useState<Anime | null>(boot);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!boot);
   const [userRating, setUserRating] = useState(0);
   const [review, setReview] = useState('');
-  const [selectedEpisode, setSelectedEpisode] = useState<number | null>(null);
+  const navigate = useNavigate();
   const [showListPicker, setShowListPicker] = useState(false);
-  const animeRef = useRef<Anime | null>(null);
+  const animeRef = useRef<Anime | null>(boot);
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityScore | null>(null);
   const [related, setRelated] = useState<Anime[]>([]);
+  const [knownRelations, setKnownRelations] = useState<Map<string, { id: string; title: string; year: number | null }>>(new Map());
+  const [episodeActivity, setEpisodeActivity] = useState<Map<number, { comments: number; ratings: number }>>(new Map());
   const displayTitle = useAnimeTitle(anime);
+  // With the JP switch on, the heading is already the romaji title.
+  const aliases = anime ? otherNames(anime).filter((name: string) => name !== displayTitle) : [];
 
   /**
    * A well-formed /anime/anilist-<n> URL for a row that does not exist still
@@ -34,6 +48,23 @@ export default function AnimeDetailPage() {
    * this fetch can. Mark those noindex so they do not accumulate as soft 404s.
    */
   useNoIndex(!loading && !anime);
+
+  /* Any other form of this title's URL — the original anilist- one, a bare
+     id, a slug from before a rename — is replaced in the address bar with the
+     canonical path, as the server answers it with a 301 on a direct visit. */
+  useEffect(() => {
+    if (anime && anime.id === id && location.pathname !== animePath(anime)) {
+      navigate(animePath(anime) + location.search + location.hash, { replace: true });
+    }
+  }, [anime, id, location.pathname, location.search, location.hash, navigate]);
+
+  /* The same title and description the prerender serves, so a visit that
+     arrives by client-side navigation gets them too. */
+  useSeo(
+    anime
+      ? { title: titleTag(anime), description: metaDescription(anime, { community }), path: animePath(anime) }
+      : { title: '' }
+  );
 
   /* Refetched whenever the reviews list changes, since posting a review also
      writes a rating — the displayed score would otherwise lag by a page load. */
@@ -49,6 +80,8 @@ export default function AnimeDetailPage() {
     if (!anime) return;
     let cancelled = false;
     getRelatedAnime(anime).then(rows => { if (!cancelled) setRelated(rows); });
+    getKnownTitles((anime.relations ?? []).map(r => r.id)).then(known => { if (!cancelled) setKnownRelations(known); });
+    if (lastEpisode(anime)) getEpisodeActivity(anime.id).then(act => { if (!cancelled) setEpisodeActivity(act); });
     return () => { cancelled = true; };
   }, [anime]);
 
@@ -84,30 +117,31 @@ export default function AnimeDetailPage() {
   useEffect(() => {
     if (!id) {
       setAnime(null);
-      setReviews([]);
       return;
     }
-    
+
+    // Already have it — handed over by the prerender, or loaded before.
     const currentId = animeRef.current?.id;
     if (currentId === id && anime) {
       return;
     }
-    
-    let cancelled = false;
+
     animeRef.current = null;
     setAnime(null);
+    loadAnime(id);
+  }, [id, loadAnime]);
+
+  /* Reviews load on their own, alongside the row rather than after it, so a
+     page whose row came with the HTML still gets them. */
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
     setReviews([]);
-    
-    loadAnime(id).then(() => {
-      if (!cancelled) {
-        loadReviews(id);
-      }
-    });
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [id, loadAnime, loadReviews]);
+    getAnimeReviews(id)
+      .then((data) => { if (!cancelled) setReviews(data); })
+      .catch((error) => console.error('Error loading reviews:', error));
+    return () => { cancelled = true; };
+  }, [id]);
 
 
   if (loading && !anime) {
@@ -312,13 +346,27 @@ export default function AnimeDetailPage() {
               {displayTitle || 'Loading...'}
             </h1>
 
+            {/* Every other name the title is searched by — the same list the
+                served HTML and the structured data carry. */}
+            {aliases.length > 0 && (
+              <p className="-mt-1 mb-3 sm:mb-4 text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                Also known as{' '}
+                {aliases.map((name, i) => (
+                  <span key={name}>
+                    {i > 0 && ' · '}
+                    <span lang={nameLang(name) ?? undefined}>{name}</span>
+                  </span>
+                ))}
+              </p>
+            )}
+
             <div className="mb-3 sm:mb-4 flex flex-wrap items-center gap-2 sm:gap-3">
               {/* Two scores, and it must be obvious which is which. The starred
-                  number is MyAnimeList's aggregate of MyAnimeList users — it was
-                  previously unlabelled, which read as though it were Rebyuu's own
-                  verdict on the title. The second is genuinely ours, appears only
-                  once enough people have rated to mean anything, and states the
-                  count so the reader can weigh it. */}
+                  number is AniList's average of its own users' scores — the sync
+                  stores AniList's averageScore; it was once labelled MAL, which it
+                  never was. The second is genuinely ours, appears only once enough
+                  people have rated to mean anything, and states the count so the
+                  reader can weigh it. */}
               {anime?.rating && (
                 <div className="flex items-center gap-2">
                   <Star className="h-5 w-5 star-gold" />
@@ -327,9 +375,9 @@ export default function AnimeDetailPage() {
                   <span
                     className="text-[10px] uppercase tracking-[0.14em] text-muted-foreground/60"
                     style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}
-                    title="Community score from MyAnimeList users, via the Jikan API"
+                    title="Average score from AniList users"
                   >
-                    MAL
+                    AniList
                   </span>
                 </div>
               )}
@@ -372,6 +420,8 @@ export default function AnimeDetailPage() {
                   <span>{anime.episodes} Episodes</span>
                 </div>
               )}
+
+              {anime && <ExtraFacts anime={anime} />}
             </div>
 
             <div className="mb-4 sm:mb-5 flex flex-wrap gap-1.5">
@@ -419,6 +469,8 @@ export default function AnimeDetailPage() {
         </div>
 
         <div className="space-y-6 sm:space-y-8 mt-6 sm:mt-8">
+          {anime && <WhereToWatch anime={anime} />}
+          {anime && <NextEpisode anime={anime} />}
           {anime?.trailer && (
             <motion.section
               initial={{ opacity: 0, y: 20 }}
@@ -451,8 +503,8 @@ export default function AnimeDetailPage() {
             </motion.section>
           )}
 
-          {/* Episodes */}
-          {anime?.episodes && anime.episodes > 0 && (
+          {/* Episodes — each has its own page (EpisodePage). */}
+          {anime && lastEpisode(anime) && (
             <motion.section
               initial={{ opacity: 0, y: 20 }}
               whileInView={{ opacity: 1, y: 0 }}
@@ -461,14 +513,14 @@ export default function AnimeDetailPage() {
             >
               <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Episodes</h2>
               <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-3">
-                {Array.from({ length: anime?.episodes || 0 }, (_, i) => {
+                {Array.from({ length: lastEpisode(anime) || 0 }, (_, i) => {
                   const episodeNum = i + 1;
-                  return (
-                    <button
-                      key={episodeNum}
-                      onClick={() => setSelectedEpisode(episodeNum)}
-                      className="flex items-center gap-3 sm:gap-4 rounded-md border border-ink/20 bg-card p-3 sm:p-4 text-left transition-all hover:border-ink/35 hover:shadow-lg hover:shadow-black/20 min-h-[60px] sm:min-h-[70px] group"
-                    >
+                  const path = episodePath(anime, episodeNum);
+                  const next = anime.status === 'airing' ? nextEpisode(anime) : null;
+                  const caption = next?.episode === episodeNum ? 'Next' : next && next.episode - 1 === episodeNum ? 'Latest' : null;
+                  const className = "flex items-center gap-3 sm:gap-4 rounded-md border border-ink/20 bg-card p-3 sm:p-4 text-left transition-all hover:border-ink/35 hover:shadow-lg hover:shadow-black/20 min-h-[60px] sm:min-h-[70px] group";
+                  const inner = (
+                    <>
                       <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-md bg-crimson/10 text-sm font-bold text-crimson group-hover:bg-crimson/15 transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
                         {episodeNum}
                       </div>
@@ -482,13 +534,28 @@ export default function AnimeDetailPage() {
                           the button is now just what it honestly is: navigation. */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-foreground group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>Episode {episodeNum}</h3>
+                        {caption && (
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-orange" style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>{caption}</p>
+                        )}
                       </div>
-                    </button>
+                    </>
+                  );
+                  /* Indexable episodes are real links, which crawlers follow.
+                     The rest navigate from a button, so the page does not hand
+                     crawlers hundreds of empty, noindex episode pages. See
+                     api/_episodes.js. */
+                  return isEpisodeIndexable(anime, episodeNum, episodeActivity.get(episodeNum)) ? (
+                    <Link key={episodeNum} to={path} className={className}>{inner}</Link>
+                  ) : (
+                    <button key={episodeNum} type="button" onClick={() => navigate(path)} className={className}>{inner}</button>
                   );
                 })}
               </div>
             </motion.section>
           )}
+
+          {anime && <QuickAnswers anime={anime} />}
+          {anime && <RelatedSeasons anime={anime} known={knownRelations} />}
 
           {/* Reviews */}
           <motion.section
@@ -497,7 +564,7 @@ export default function AnimeDetailPage() {
             viewport={{ once: true }}
             transition={{ duration: 0.5 }}
           >
-            <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>Reviews</h2>
+            <h2 className="mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>{displayTitle ? `${displayTitle} reviews` : 'Reviews'}</h2>
 
             {user && (
               <form onSubmit={handleSubmitReview} className="mb-4 sm:mb-6 rounded-lg border border-ink/20 bg-card p-4 sm:p-5 md:p-6">
@@ -559,7 +626,7 @@ export default function AnimeDetailPage() {
                 <p className="text-sm text-muted-foreground" style={{ fontFamily: 'Outfit, ui-sans-serif, sans-serif', fontStyle: 'normal' }}>
                   <Link
                     to="/login"
-                    state={{ from: `/anime/${id}` }}
+                    state={{ from: location.pathname }}
                     className="underline underline-offset-2 hover:text-orange"
                   >
                     Sign in
@@ -660,15 +727,6 @@ export default function AnimeDetailPage() {
         </div>
       </div>
 
-      {selectedEpisode && (
-        <EpisodeModal
-          isOpen={!!selectedEpisode}
-          onClose={() => setSelectedEpisode(null)}
-          animeId={anime?.id || ''}
-          episodeNumber={selectedEpisode || 0}
-          animeTitle={displayTitle || ''}
-        />
-      )}
       <ListPickerModal
         isOpen={showListPicker}
         onClose={() => setShowListPicker(false)}

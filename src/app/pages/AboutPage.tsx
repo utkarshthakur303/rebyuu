@@ -51,7 +51,7 @@ export default function AboutPage() {
 
       <ProseH3>MyAnimeList, via Jikan</ProseH3>
       <p>
-        The numeric score on a title page comes from{' '}
+        The score in the homepage's featured banner comes from{' '}
         <a href="https://myanimelist.net" rel="noopener noreferrer" target="_blank" className="underline underline-offset-2 hover:text-orange">
           MyAnimeList
         </a>
@@ -60,17 +60,18 @@ export default function AboutPage() {
           Jikan
         </a>
         , an unofficial community-maintained API. Jikan is not affiliated with MyAnimeList,
-        and neither are we.
+        and neither are we. When MyAnimeList has no score for the featured title, the banner
+        shows AniList's instead and labels it as AniList's.
       </p>
 
       <ProseH2>How to read the scores</ProseH2>
       <p>
-        There are two different numbers on this site and they measure different things.
+        A title page can show two different numbers, and they measure different things.
       </p>
       <p>
-        The <strong>MAL score</strong> is MyAnimeList's community aggregate — tens of
-        thousands of votes from their users, not ours. We show it because it is genuinely
-        useful, but it is their verdict, not Rebyuu's. For that reason we deliberately do
+        The <strong>AniList score</strong> is the average score AniList's users have given
+        the title — their votes, not ours. We show it because it is genuinely useful, but it
+        is their verdict, not Rebyuu's. For that reason we deliberately do
         not mark it up as this page's own rating in structured data: presenting another
         platform's aggregate as our own is exactly the kind of thing that makes review
         snippets untrustworthy across the whole web.

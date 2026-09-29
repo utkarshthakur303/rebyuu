@@ -29,6 +29,8 @@ export function useSeo(opts: { title: string; description?: string; path?: strin
   const { title, description, path } = opts;
 
   useEffect(() => {
+    // An empty title means "nothing to set yet" — a page still loading its data.
+    if (!title) return;
     const previousTitle = document.title;
     document.title = title;
 
