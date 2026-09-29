@@ -100,6 +100,24 @@ export async function getAnimeList(filters?: {
  * `.maybeSingle()` rather than `.single()`: the latter treats "no rows" as an
  * error, which made a miss indistinguishable from a real failure.
  */
+/**
+ * The row the prerender built this page from, when it is the title being
+ * asked for. api/render.js hands it over in <script id="rebyuu-boot"> so the
+ * detail page's first render has it: no second fetch of the same row, and no
+ * spinner between the served page and React's. Client-side navigation to any
+ * other title finds no match and fetches as before.
+ */
+export function readBootAnime(id: string): Anime | null {
+  if (typeof document === 'undefined' || !id) return null;
+  try {
+    const text = document.getElementById('rebyuu-boot')?.textContent;
+    const data = text ? JSON.parse(text) : null;
+    return data?.anime?.id === id ? (data.anime as Anime) : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function getAnimeById(id: string): Promise<Anime | null> {
   const { data, error } = await supabase
     .from('anime_index')

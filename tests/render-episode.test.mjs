@@ -33,6 +33,15 @@ test('an episode page has its own title, canonical, heading and a link back to t
   assert.match(rootOf(res.body), /<a href="\/anime\/1-target-show">Target Show<\/a>/);
 });
 
+test('an episode page shares the poster but preloads nothing, since it shows no image', async () => {
+  installFetch({ tables: tables() });
+
+  const { body } = await render(handler, 'route=episode&ref=1-target-show&ep=3');
+
+  assert.match(body, /<meta property="og:image" content="https:\/\/img.test\/1.jpg" \/>/);
+  assert.doesNotMatch(body, /rel="preload" as="image"/);
+});
+
 test('an episode page is marked up as a TVEpisode of its series', async () => {
   installFetch({ tables: tables() });
 

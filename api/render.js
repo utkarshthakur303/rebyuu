@@ -286,7 +286,7 @@ function renderTitleList({ heading, subtitle, items }) {
 const DEFAULT_ROBOTS = 'max-image-preview:large';
 
 /** Replaces the shell's single shared title/description with this route's. */
-function injectHead(html, { title, description, canonical, image, ld, robots }) {
+function injectHead(html, { title, description, canonical, image, preload = image, ld, robots }) {
   const tags = [
     `<title>${escapeHtml(title)}</title>`,
     `<meta name="description" content="${escapeHtml(description)}" />`,
@@ -303,10 +303,12 @@ function injectHead(html, { title, description, canonical, image, ld, robots }) 
   if (image) {
     tags.push(`<meta property="og:image" content="${escapeHtml(image)}" />`);
     tags.push(`<meta name="twitter:image" content="${escapeHtml(image)}" />`);
-    // Lets the browser start the LCP fetch during head parse, before the
-    // bundle has run — impossible while the URL was only knowable in JS.
-    tags.push(`<link rel="preload" as="image" href="${escapeHtml(image)}" fetchpriority="high" />`);
   }
+  // Lets the browser start the LCP fetch during head parse, before the
+  // bundle has run — impossible while the URL was only knowable in JS.
+  // `preload` is the image the page paints first, which is not always the
+  // share image: a title page shares its poster but paints its banner.
+  if (preload) tags.push(`<link rel="preload" as="image" href="${escapeHtml(preload)}" fetchpriority="high" />`);
   tags.push(`<meta name="robots" content="${escapeHtml(robots || DEFAULT_ROBOTS)}" />`);
   if (ld) tags.push(`<script type="application/ld+json">${jsonLd(ld)}</script>`);
 
@@ -323,9 +325,16 @@ function injectHead(html, { title, description, canonical, image, ld, robots }) 
   return out.replace('</head>', `${tags.join('\n    ')}\n  </head>`);
 }
 
-/** Injected into #root. React clears this on mount. */
-function injectBody(html, content) {
-  return html.replace('<div id="root"></div>', `<div id="root">${content}</div>`);
+/**
+ * Injected into #root. React clears this on mount. `boot` is data the page
+ * was built from, handed to React after #root so its first render can use it
+ * instead of fetching it again (see takeBoot in services/anime.ts).
+ */
+function injectBody(html, content, boot = null) {
+  const data = boot ? `\n    <script id="rebyuu-boot" type="application/json">${jsonLd(boot)}</script>` : '';
+  return html
+    .replace('<div id="root"></div>', `<div id="root">${content}</div>`)
+    .replace('</body>', `${data}\n  </body>`);
 }
 
 /**
@@ -573,9 +582,20 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
     description,
     canonical: pageUrl,
     image: row.cover_image || image,
+    // The banner is the LCP element. Preloading the poster instead — as this
+    // did — spent the first ~40 KB of a slow connection on an image that is
+    // not the one being waited for; measured on a throttled mobile profile,
+    // Frieren's banner painted at 3.6 s with the poster preloaded.
+    preload: image,
     ld,
   });
-  return injectBody(html, content);
+  /*
+   * React's detail page used to mount, wipe this markup for a spinner, fetch
+   * the same row again, then draw the banner: measured on a throttled mobile
+   * profile, the banner painted ~1 s after the bundle ran. With the row handed
+   * over, React's first render already has it.
+   */
+  return injectBody(html, content, { anime: row });
 }
 
 /**
@@ -806,6 +826,7 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
       description: episodeDescription(row, n, stats, { timeZone: 'UTC' }),
       canonical: url,
       image: row.cover_image || null,
+      preload: null, // an episode page shows no image; nothing to wait for
       ld,
       robots: indexable ? null : 'noindex, follow',
     }),

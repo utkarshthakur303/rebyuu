@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-react';
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, getKnownTitles, getEpisodeActivity, type Anime, type CommunityScore, type Review } from '@/services/anime';
+import { readBootAnime, getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, getKnownTitles, getEpisodeActivity, type Anime, type CommunityScore, type Review } from '@/services/anime';
 import { ExtraFacts, WhereToWatch, NextEpisode, QuickAnswers, RelatedSeasons } from '@/app/components/TitleDetails';
 import { AnimeCard } from '@/app/components/AnimeCard';
 import { useAuth } from '@/context/AuthContext';
@@ -23,14 +23,16 @@ export default function AnimeDetailPage() {
   const id = parseAnimeRef(ref)?.id ?? '';
   const location = useLocation();
   const { user } = useAuth();
-  const [anime, setAnime] = useState<Anime | null>(null);
+  // On a served title page the row is already in the HTML (readBootAnime).
+  const [boot] = useState(() => readBootAnime(id));
+  const [anime, setAnime] = useState<Anime | null>(boot);
   const [reviews, setReviews] = useState<Review[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!boot);
   const [userRating, setUserRating] = useState(0);
   const [review, setReview] = useState('');
   const navigate = useNavigate();
   const [showListPicker, setShowListPicker] = useState(false);
-  const animeRef = useRef<Anime | null>(null);
+  const animeRef = useRef<Anime | null>(boot);
   const [deletingReview, setDeletingReview] = useState<string | null>(null);
   const [community, setCommunity] = useState<CommunityScore | null>(null);
   const [related, setRelated] = useState<Anime[]>([]);
@@ -115,30 +117,31 @@ export default function AnimeDetailPage() {
   useEffect(() => {
     if (!id) {
       setAnime(null);
-      setReviews([]);
       return;
     }
-    
+
+    // Already have it — handed over by the prerender, or loaded before.
     const currentId = animeRef.current?.id;
     if (currentId === id && anime) {
       return;
     }
-    
-    let cancelled = false;
+
     animeRef.current = null;
     setAnime(null);
+    loadAnime(id);
+  }, [id, loadAnime]);
+
+  /* Reviews load on their own, alongside the row rather than after it, so a
+     page whose row came with the HTML still gets them. */
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
     setReviews([]);
-    
-    loadAnime(id).then(() => {
-      if (!cancelled) {
-        loadReviews(id);
-      }
-    });
-    
-    return () => {
-      cancelled = true;
-    };
-  }, [id, loadAnime, loadReviews]);
+    getAnimeReviews(id)
+      .then((data) => { if (!cancelled) setReviews(data); })
+      .catch((error) => console.error('Error loading reviews:', error));
+    return () => { cancelled = true; };
+  }, [id]);
 
 
   if (loading && !anime) {

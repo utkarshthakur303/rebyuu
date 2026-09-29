@@ -268,6 +268,36 @@ test('a path segment that is not a title reference is a 404', async () => {
   assert.equal((await render(handler, 'route=anime&ref=target-show')).statusCode, 404);
 });
 
+test('the image preloaded is the banner the page paints first; the share image stays the cover', async () => {
+  const withBanner = { ...target, banner_image: 'https://img.test/banner-1.jpg' };
+  installFetch({ tables: { anime_index: [withBanner], ratings: [] } });
+
+  const { body } = await render(handler, 'route=anime&ref=1-target-show');
+
+  assert.match(body, /<link rel="preload" as="image" href="https:\/\/img.test\/banner-1.jpg" fetchpriority="high" \/>/);
+  assert.doesNotMatch(body, /<link rel="preload" as="image" href="https:\/\/img.test\/1.jpg"/);
+  assert.match(body, /<meta property="og:image" content="https:\/\/img.test\/1.jpg" \/>/);
+});
+
+const bootOf = (body) => {
+  const m = body.match(/<script id="rebyuu-boot" type="application\/json">(.*?)<\/script>/s);
+  return m ? JSON.parse(m[1]) : null;
+};
+
+test('the served page carries the row it was built from, so React need not fetch it again', async () => {
+  const tricky = { ...target, description: 'Ends with </script><script>alert(1)</script> & more' };
+  installFetch({ tables: { anime_index: [tricky], ratings: [] } });
+
+  const { body } = await render(handler, 'route=anime&ref=1-target-show');
+
+  const boot = bootOf(body);
+  assert.equal(boot.anime.id, 'anilist-1');
+  assert.equal(boot.anime.description, tricky.description);
+  // Outside #root (React replaces #root's contents) and unable to close its own tag.
+  assert.ok(body.indexOf('id="rebyuu-boot"') > body.lastIndexOf('</div>'), 'after #root has closed');
+  assert.equal(body.match(/<\/script>/g).length, body.match(/<script/g).length);
+});
+
 test('an unknown title id is still a real 404', async () => {
   installFetch({ tables: { anime_index: [target], ratings: [] } });
 
