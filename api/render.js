@@ -1,6 +1,8 @@
 import { SHELL } from './_shell.js';
 import { ORIGIN, escapeHtml, stripTags, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
 import { sb, anilist, rankedIds, rowsById } from './_upstream.js';
+import { parseHubPath, hubPath } from './_hubs.js';
+import { loadHub, renderHub, HubDataError } from './_hubpage.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath, parseAnimeRef } from './_paths.js';
@@ -82,7 +84,7 @@ const PROSE_ROUTES = ['about', 'terms', 'privacy'];
  * get the page's head and heading without the live title lists, rather than
  * waiting on AniList for links no crawler should be collecting from them.
  */
-const INTERNAL_PARAMS = new Set(['route', 'id', 'ref', 'ep']);
+const INTERNAL_PARAMS = new Set(['route', 'id', 'ref', 'ep', 'hub', 'key']);
 const isVariant = (url) => [...url.searchParams.keys()].some((k) => !INTERNAL_PARAMS.has(k));
 
 /** Comments shown on an episode page, newest first. */
@@ -199,12 +201,19 @@ function redirect(res, path) {
   res.status(301).send('');
 }
 
-function send(res, status, html) {
+/**
+ * Rendered HTML is cached at the edge so a crawl of 6,165 URLs does not
+ * become 6,165 database round trips. Content changes only when the nightly
+ * sync runs, so an hour of freshness is generous.
+ */
+const PAGE_CACHE = 'public, s-maxage=3600, stale-while-revalidate=86400';
+
+/** The airing schedule goes out of date by the hour, so /airing is served fresher. */
+const AIRING_CACHE = 'public, s-maxage=900, stale-while-revalidate=3600';
+
+function send(res, status, html, cache = PAGE_CACHE) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  // Rendered HTML is cached at the edge so a crawl of 6,165 URLs does not
-  // become 6,165 database round trips. Content changes only when the nightly
-  // sync runs, so an hour of freshness is generous.
-  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.setHeader('Cache-Control', cache);
   res.status(status).send(html);
 }
 
@@ -677,27 +686,70 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
 }
 
 /** A well-formed id with no row behind it is a genuine 404, not a soft one. */
-function renderMissing() {
+function renderMissing({ heading = 'Not in the archive', text = 'This title is not in the Rebyuu catalogue.' } = {}) {
   return injectHead(
     injectBody(SHELL, `
       <main class="mx-auto max-w-3xl px-4 py-16" style="text-align:center">
-        <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,48px)">Not in the archive</h1>
-        <p style="font-family:Outfit,ui-sans-serif,sans-serif">This title is not in the Rebyuu catalogue.</p>
+        <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,48px)">${escapeHtml(heading)}</h1>
+        <p style="font-family:Outfit,ui-sans-serif,sans-serif">${escapeHtml(text)}</p>
         <p style="font-family:Outfit,ui-sans-serif,sans-serif"><a href="/browse">Browse the catalogue</a></p>
       </main>`),
     {
-      title: 'Not in the archive · Rebyuu',
-      description: 'This title is not in the Rebyuu catalogue.',
+      title: `${heading} · Rebyuu`,
+      description: text,
       canonical: `${ORIGIN}/browse`,
       robots: 'noindex, follow',
     }
   );
 }
 
+/** A hub with nothing to show: an unknown season, a year out of range, an empty season. */
+const NO_HUB = { heading: 'Nothing listed here', text: 'There is no anime listed for this page yet.' };
+
+/**
+ * The catalogue can't be read right now. 503 tells crawlers to come back
+ * rather than record an empty page; the body is the app shell, so a visitor
+ * still gets the page, rendered in the browser.
+ */
+function unavailable(res) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '600');
+  res.status(503).send(SHELL);
+}
+
+/** The path a hub rewrite came from; vercel.json passes the hub's kind and key. */
+const HUB_PATHS = {
+  season: (key) => `/seasons/${key}`,
+  airing: () => '/airing',
+  upcoming: () => '/upcoming',
+};
+const hubPathname = (kind, key) => HUB_PATHS[kind]?.(key ?? '') ?? null;
+
+/** /seasons/fall-2026, /airing, /upcoming — see _hubs.js and _hubpage.js. */
+async function serveHub(res, url) {
+  const pathname = hubPathname(url.searchParams.get('hub'), url.searchParams.get('key'));
+  const hub = pathname ? parseHubPath(pathname) : null;
+  if (!hub) return send(res, 404, renderMissing(NO_HUB));
+  if (hubPath(hub) !== pathname) return redirect(res, hubPath(hub));
+
+  let data;
+  try {
+    data = await loadHub(hub);
+  } catch (err) {
+    if (err instanceof HubDataError) return unavailable(res);
+    throw err;
+  }
+  if (!data.items.length) return send(res, 404, renderMissing(NO_HUB));
+  return send(res, 200, renderHub(hub, data), hub.kind === 'airing' ? AIRING_CACHE : PAGE_CACHE);
+}
+
 export default async function handler(req, res) {
   try {
     const url = new URL(req.url, ORIGIN);
     const route = url.searchParams.get('route');
+
+    if (route === 'hub') return await serveHub(res, url);
 
     if (route === 'anime') {
       const requested = requestedRef(url);
