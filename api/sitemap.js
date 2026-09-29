@@ -1,6 +1,7 @@
 import { animePath } from './_paths.js';
 import { episodePath, episodeActivity, indexableEpisodes } from './_episodes.js';
 import { qualityFilter } from './_quality.js';
+import { censusPath, indexedHubPaths } from './_hubdb.js';
 
 /**
  * XML sitemaps for title pages, generated from anime_index on request.
@@ -14,6 +15,7 @@ import { qualityFilter } from './_quality.js';
  *   /sitemap-index.xml     -> ?kind=index      the static sitemap + every anime page
  *   /sitemap-anime-N.xml   -> ?kind=anime&page=N
  *   /sitemap-episodes.xml  -> ?kind=episodes   indexable episode pages (_episodes.js)
+ *   /sitemap-hubs.xml      -> ?kind=hubs       season, airing and upcoming pages (_hubdb.js)
  *
  * lastmod comes from anime_index.updated_at. That is only meaningful because
  * the sync writes a row only when something in it changed; before that, every
@@ -123,7 +125,7 @@ function urlset(entries) {
 }
 
 function sitemapIndex(pages) {
-  const entries = ['sitemap-static.xml', 'sitemap-episodes.xml', ...Array.from({ length: pages }, (_, i) => `sitemap-anime-${i + 1}.xml`)];
+  const entries = ['sitemap-static.xml', 'sitemap-hubs.xml', 'sitemap-episodes.xml', ...Array.from({ length: pages }, (_, i) => `sitemap-anime-${i + 1}.xml`)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries
     .map((file) => `  <sitemap>\n    <loc>${ORIGIN}/${file}</loc>\n  </sitemap>`)
     .join('\n')}\n</sitemapindex>\n`;
@@ -152,6 +154,11 @@ export default async function handler(req, res) {
       return rows.length
         ? send(res, 200, urlset(rows.map((row) => ({ path: animePath(row), lastmod: day(row.updated_at) }))))
         : send(res, 404, '');
+    }
+    if (kind === 'hubs') {
+      // A season is listed the day the sync brings it 12 quality titles. The
+      // same count decides each page's robots tag, so nothing listed says noindex.
+      return send(res, 200, urlset(indexedHubPaths(await allRows(censusPath())).map((path) => ({ path }))));
     }
     if (kind === 'episodes') {
       // An empty list is a valid answer here: no episode has earned a page yet.

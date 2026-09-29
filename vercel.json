@@ -26,6 +26,10 @@
       "destination": "/api/sitemap?kind=episodes"
     },
     {
+      "source": "/sitemap-hubs.xml",
+      "destination": "/api/sitemap?kind=hubs"
+    },
+    {
       "source": "/",
       "destination": "/api/render?route=home"
     },
