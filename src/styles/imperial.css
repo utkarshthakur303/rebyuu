@@ -403,6 +403,17 @@
   background: var(--orange-deep);
 }
 
+/* Sideways rows of chips (a hub's season links, the schedule's days):
+   scrolled by swipe or trackpad, without the page's heavy bar beneath them.
+   On desktop widths they fit and never scroll. */
+.scroll-row {
+  scrollbar-width: none;
+}
+
+.scroll-row::-webkit-scrollbar {
+  display: none;
+}
+
 /* ── Selection ───────────────────────────────────────── */
 ::selection {
   background: var(--orange);

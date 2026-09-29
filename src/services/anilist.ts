@@ -101,7 +101,7 @@ const BY_IDS_QUERY = `
   }
 `;
 
-async function anilistRequest<T>(
+export async function anilistRequest<T>(
   query: string,
   variables: unknown,
   timeoutMs?: number

@@ -50,9 +50,14 @@ function RouteFallback() {
 }
 
 function ScrollToTop() {
-  const { pathname } = useLocation();
+  const { pathname, state } = useLocation();
   useEffect(() => {
+    // A filter change that moves between a hub page and Browse is not a new
+    // page, so it keeps your place; BrowsePage marks those navigations.
+    if ((state as { keepScroll?: boolean } | null)?.keepScroll) return;
     window.scrollTo({ top: 0, behavior: 'instant' });
+    // Only a new path scrolls; the state is read, not watched.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
   return null;
 }
@@ -74,7 +79,15 @@ export default function App() {
             <Suspense fallback={<RouteFallback />}>
             <Routes>
               <Route path="/" element={<ErrorBoundary><LandingPage /></ErrorBoundary>} />
-              <Route path="/browse" element={<ErrorBoundary><BrowsePage /></ErrorBoundary>} />
+              {/* Browse and the hub pages are one page on different paths. As a
+                  layout route it stays mounted when a filter change moves
+                  between them, so an open filter drawer stays open. */}
+              <Route element={<ErrorBoundary><BrowsePage /></ErrorBoundary>}>
+                <Route path="/browse" element={null} />
+                <Route path="/seasons/:key" element={null} />
+                <Route path="/airing" element={null} />
+                <Route path="/upcoming" element={null} />
+              </Route>
               <Route path="/anime/:id" element={<ErrorBoundary><AnimeDetailPage /></ErrorBoundary>} />
               <Route path="/anime/:id/episode/:ep" element={<ErrorBoundary><EpisodePage /></ErrorBoundary>} />
               <Route path="/profile" element={<ErrorBoundary><ProtectedRoute><ProfilePage /></ProtectedRoute></ErrorBoundary>} />

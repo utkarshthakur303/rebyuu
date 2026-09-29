@@ -17,6 +17,9 @@ const FIRST_MONTH = ['January', 'April', 'July', 'October'];
 
 const seasonName = (hub) => `${hub.season} ${hub.year}`;
 
+/** A hub path with nothing to show — a season that can't exist, or one without shows — as the 404 names it. */
+export const HUB_MISSING = { heading: 'Nothing listed here', text: 'There is no anime listed for this page yet.' };
+
 /** "A", "A and B", "A, B and C". */
 export function listNames(names) {
   if (names.length < 2) return names.join('');

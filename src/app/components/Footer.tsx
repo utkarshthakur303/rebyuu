@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/AuthContext';
+import { hubNavLinks } from '../../../api/_hubs.js';
 
 export function Footer() {
   const { user } = useAuth();
@@ -10,7 +11,7 @@ export function Footer() {
       <div className="absolute inset-0 bg-gradient-to-t from-transparent via-transparent to-crimson/[0.02] pointer-events-none" />
 
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-12 md:py-16">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-8 md:gap-12">
+        <div className="grid grid-cols-1 md:grid-cols-5 gap-8 md:gap-12">
           {/* Brand Column */}
           <div className="md:col-span-2">
             <Link to="/" className="inline-block mb-4">
@@ -55,6 +56,26 @@ export function Footer() {
                 <Link
                   key={item.to}
                   to={item.to}
+                  className="flex items-center min-h-[24px] text-sm text-parchment/70 hover:text-orange transition-colors duration-300"
+                  style={{ fontFamily: 'Outfit, sans-serif' }}
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </div>
+
+          {/* Seasons & charts — the hub pages, on every page: this season,
+              next season (searched for weeks before it starts), airing, upcoming. */}
+          <div>
+            <h4 className="text-xs font-semibold tracking-[0.15em] uppercase text-orange mb-4" style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>
+              Seasons &amp; Charts
+            </h4>
+            <nav className="space-y-2.5">
+              {hubNavLinks(new Date()).map(item => (
+                <Link
+                  key={item.path}
+                  to={item.path}
                   className="flex items-center min-h-[24px] text-sm text-parchment/70 hover:text-orange transition-colors duration-300"
                   style={{ fontFamily: 'Outfit, sans-serif' }}
                 >

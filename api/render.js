@@ -2,6 +2,7 @@ import { SHELL } from './_shell.js';
 import { ORIGIN, escapeHtml, stripTags, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
 import { sb, anilist, rankedIds, rowsById } from './_upstream.js';
 import { parseHubPath, hubPath } from './_hubs.js';
+import { HUB_MISSING } from './_hubcopy.js';
 import { loadHub, renderHub, renderHubLinks, HubDataError, LIST_COLUMNS, bootItem } from './_hubpage.js';
 import { EXCLUDED_GENRES } from './_catalog.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
@@ -713,9 +714,6 @@ function renderMissing({ heading = 'Not in the archive', text = 'This title is n
   );
 }
 
-/** A hub with nothing to show: an unknown season, a year out of range, an empty season. */
-const NO_HUB = { heading: 'Nothing listed here', text: 'There is no anime listed for this page yet.' };
-
 /**
  * The catalogue can't be read right now. 503 tells crawlers to come back
  * rather than record an empty page; the body is the app shell, so a visitor
@@ -740,7 +738,7 @@ const hubPathname = (kind, key) => HUB_PATHS[kind]?.(key ?? '') ?? null;
 async function serveHub(res, url) {
   const pathname = hubPathname(url.searchParams.get('hub'), url.searchParams.get('key'));
   const hub = pathname ? parseHubPath(pathname) : null;
-  if (!hub) return send(res, 404, renderMissing(NO_HUB));
+  if (!hub) return send(res, 404, renderMissing(HUB_MISSING));
   if (hubPath(hub) !== pathname) return redirect(res, hubPath(hub));
 
   let data;
@@ -750,7 +748,7 @@ async function serveHub(res, url) {
     if (err instanceof HubDataError) return unavailable(res);
     throw err;
   }
-  if (!data.items.length) return send(res, 404, renderMissing(NO_HUB));
+  if (!data.items.length) return send(res, 404, renderMissing(HUB_MISSING));
   return send(res, 200, renderHub(hub, data), hub.kind === 'airing' ? AIRING_CACHE : PAGE_CACHE);
 }
 

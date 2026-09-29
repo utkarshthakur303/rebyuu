@@ -94,14 +94,6 @@ export async function getAnimeList(filters?: {
 }
 
 /**
- * One title by id.
- *
- * Falls back to AniList when the row isn't in our snapshot, so a suggestion for
- * a newly announced show still opens instead of landing on "not found".
- * `.maybeSingle()` rather than `.single()`: the latter treats "no rows" as an
- * error, which made a miss indistinguishable from a real failure.
- */
-/**
  * The row the prerender built this page from, when it is the title being
  * asked for. api/render.js hands it over in <script id="rebyuu-boot"> so the
  * detail page's first render has it: no second fetch of the same row, and no
@@ -119,6 +111,43 @@ export function readBootAnime(id: string): Anime | null {
   }
 }
 
+/** A hub's or /browse's first page, as the prerender hands it over (api/_hubpage.js, api/render.js). */
+export interface BootList {
+  path: string;
+  /** Null when the server's list was not the one React would show (AniList was down). */
+  items: Anime[] | null;
+  hasMore?: boolean;
+  live?: boolean;
+  indexable?: boolean;
+  links?: { label: string; path: string }[];
+  schedule?: { id: string; title: string | null; episode: number; at: number }[];
+}
+
+/**
+ * The list the prerender built this page from, when this is the page it was
+ * built for: the grid's first render uses it instead of fetching the same
+ * page again, as readBootAnime does for a title. Any other page finds no
+ * match and fetches as before.
+ */
+export function readBootList(path: string): BootList | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const text = document.getElementById('rebyuu-boot')?.textContent;
+    const data = text ? JSON.parse(text) : null;
+    return data?.list?.path === path ? (data.list as BootList) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One title by id.
+ *
+ * Falls back to AniList when the row isn't in our snapshot, so a suggestion for
+ * a newly announced show still opens instead of landing on "not found".
+ * `.maybeSingle()` rather than `.single()`: the latter treats "no rows" as an
+ * error, which made a miss indistinguishable from a real failure.
+ */
 export async function getAnimeById(id: string): Promise<Anime | null> {
   const { data, error } = await supabase
     .from('anime_index')

@@ -1,8 +1,14 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useCanonical } from '@/utils/useCanonical';
 import { useSeo } from '@/utils/useSeo';
+import { useNoIndex } from '@/utils/useNoIndex';
 import { PAGES } from '../../../api/_pages.js';
+import { parseHubPath, hubPath, hubPreset, hubChangeTarget, browseSearch } from '../../../api/_hubs.js';
+import { hubTitle, hubHeading, hubDescription, hubIntro, hubLinksLabel, HUB_MISSING } from '../../../api/_hubcopy.js';
+import { HUB_PAGE_SIZE } from '../../../api/_hubdata.js';
+import { HubIntro, AiringSchedule, useHubExtras } from '@/app/components/HubSections';
+import NotFoundPage from '@/app/pages/NotFoundPage';
 import { Filter, X, ChevronLeft, ChevronRight, AlertTriangle, RotateCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AnimeCard } from '@/app/components/AnimeCard';
@@ -15,6 +21,7 @@ import {
   BROWSE_SORTS,
   DEFAULT_BROWSE_SORT,
   isBrowseSort,
+  readBootList,
   type Anime,
   type BrowseSort,
 } from '@/services/anime';
@@ -42,7 +49,10 @@ interface BrowseState {
   query: string;
 }
 
-function parseState(params: URLSearchParams): BrowseState {
+/** A sort of null means none was asked for: the page's own default applies. */
+type ParsedState = Omit<BrowseState, 'sort'> & { sort: BrowseSort | null };
+
+function parseState(params: URLSearchParams): ParsedState {
   const rawGenres = params.get('genre');
   const parsedGenres = (rawGenres ? rawGenres.split(',') : [])
     // Accepts the lowercase form the homepage genre tiles link with, and
@@ -60,7 +70,7 @@ function parseState(params: URLSearchParams): BrowseState {
   const status = (statuses as readonly string[]).includes(rawStatus) ? rawStatus : 'all';
 
   const rawSort = params.get('sort') ?? '';
-  const sort = isBrowseSort(rawSort) ? rawSort : DEFAULT_BROWSE_SORT;
+  const sort = isBrowseSort(rawSort) ? rawSort : null;
 
   const rawPage = Number(params.get('page'));
   const page = Number.isFinite(rawPage) && rawPage >= 1 ? Math.floor(rawPage) : 1;
@@ -68,50 +78,94 @@ function parseState(params: URLSearchParams): BrowseState {
   return { genres: parsedGenres, year, season, status, sort, page, query: params.get('q') ?? '' };
 }
 
-/** Serialises state back to a query string, omitting anything at its default. */
-function toParams(state: BrowseState): URLSearchParams {
-  const params = new URLSearchParams();
-  if (state.query) params.set('q', state.query);
-  if (state.genres.length) params.set('genre', state.genres.join(','));
-  if (state.year) params.set('year', String(state.year));
-  if (state.season) params.set('season', state.season);
-  if (state.status !== 'all') params.set('status', state.status);
-  if (state.sort !== DEFAULT_BROWSE_SORT) params.set('sort', state.sort);
-  if (state.page > 1) params.set('page', String(state.page));
-  return params;
-}
-
+/**
+ * Browse, and the hub pages (/seasons/fall-2026, /airing, /upcoming), which
+ * are this page opened on a preset — see api/_hubs.js. On a hub the path sets
+ * the filters and the query string only the order and page.
+ */
 export default function BrowsePage() {
+  const { pathname, search } = useLocation();
+  const navigate = useNavigate();
+  // One clock per visit, so a season's "starts"/"started" can't flip mid-visit.
+  const [now] = useState(() => new Date());
+  const hub = useMemo(() => (pathname === '/browse' ? null : parseHubPath(pathname, now)), [pathname, now]);
+  const listPath = hub ? hubPath(hub) : '/browse';
+  const preset = hub ? hubPreset(hub) : null;
+  const defaultSort = (preset?.sort as BrowseSort | undefined) ?? DEFAULT_BROWSE_SORT;
+  const pageSize = hub ? HUB_PAGE_SIZE : PAGE_SIZE;
+
   /**
-   * Every faceted variant of this page — genre, year, season, status, sort,
+   * Every faceted variant of /browse — genre, year, season, status, sort,
    * page, q, in any combination — points at the bare path. They are all
    * reorderings of one catalogue, and consolidating them here means a link
    * someone shares to a filtered view still passes its weight to /browse
    * rather than stranding it on a near-duplicate. robots.txt keeps crawlers
    * out of that space in the first place; this covers the URLs that reach an
-   * engine by being linked or shared rather than by being crawled.
+   * engine by being linked or shared rather than by being crawled. A hub's
+   * variants (another order, a later page) point at the hub.
    */
-  useCanonical('/browse');
-  useSeo({ title: PAGES.browse.title, description: PAGES.browse.description });
+  // A path shaped like a hub that names none (/seasons/fall-1899) renders
+  // NotFoundPage below, under the same words the served 404 uses.
+  const missingHub = pathname !== '/browse' && !hub;
+  useCanonical(listPath);
+  useSeo(
+    missingHub
+      ? { title: `${HUB_MISSING.heading} · Rebyuu`, description: HUB_MISSING.text }
+      : {
+          title: hub ? hubTitle(hub, now) : PAGES.browse.title,
+          description: hub ? hubDescription(hub, now) : PAGES.browse.description,
+        }
+  );
 
-  const [searchParams, setSearchParams] = useSearchParams();
-  // Memoised on the serialised string, not the object: a URLSearchParams
-  // instance is not guaranteed to be referentially stable across renders, and
-  // an unstable `state` would re-fire the fetch effect on every render.
-  const search = searchParams.toString();
-  const state = useMemo(() => parseState(new URLSearchParams(search)), [search]);
+  // Memoised on the serialised string and the hub, not objects rebuilt each
+  // render: an unstable `state` would re-fire the fetch effect on every render.
+  const state: BrowseState = useMemo(() => {
+    const parsed = parseState(new URLSearchParams(search));
+    const sort = parsed.sort ?? defaultSort;
+    return preset ? { ...preset.filters, sort, page: parsed.page } : { ...parsed, sort };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, hub]);
   const { genres: selectedGenres, year: selectedYear, season: selectedSeason } = state;
   const { status: selectedStatus, sort: selectedSort, page, query: queryParam } = state;
 
-  const [animeList, setAnimeList] = useState<Anime[]>([]);
-  const [loading, setLoading] = useState(true);
+  /**
+   * The served page hands over its first page of titles (api/_hubpage.js,
+   * renderBrowse). It is used only for the exact view it was built from —
+   * this path, its default order, page 1, and on /browse no filters — so the
+   * grid a visitor from a search result sees is never swapped for skeletons.
+   */
+  const [boot] = useState(() => readBootList(pathname));
+  const [firstFromBoot] = useState(
+    () =>
+      !!boot?.items &&
+      boot.path === listPath &&
+      state.page === 1 &&
+      state.sort === defaultSort &&
+      (hub !== null || (!state.genres.length && !state.year && !state.season && state.status === 'all' && !state.query))
+  );
+
+  const [animeList, setAnimeList] = useState<Anime[]>(() => (firstFromBoot ? boot!.items! : []));
+  const [loading, setLoading] = useState(!firstFromBoot);
   const [failed, setFailed] = useState(false);
   const [totalCount, setTotalCount] = useState<number | null>(null);
   const [totalPages, setTotalPages] = useState<number | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [isLive, setIsLive] = useState(false);
+  const [hasMore, setHasMore] = useState(() => (firstFromBoot ? Boolean(boot!.hasMore) : false));
+  const [isLive, setIsLive] = useState(() => (firstFromBoot ? Boolean(boot!.live) : false));
   const [showFilters, setShowFilters] = useState(false);
   const [retryToken, setRetryToken] = useState(0);
+  const skipFirstFetch = useRef(firstFromBoot);
+
+  /**
+   * The list a hub's intro is written from: its first page in its default
+   * order, whatever order the grid is showing now. From the served page, or
+   * from the first fetch that was that page.
+   */
+  const [introSource, setIntroSource] = useState<{ path: string; items: Anime[] } | null>(() =>
+    boot?.items && hub && boot.path === listPath ? { path: listPath, items: boot.items } : null
+  );
+  const introItems = introSource?.path === listPath ? introSource.items : [];
+  const extras = useHubExtras(hub, boot);
+  const servedIndexable = boot && boot.path === listPath ? boot.indexable !== false : true;
 
   /**
    * Guards against out-of-order responses. Toggling three genre chips quickly
@@ -130,12 +184,30 @@ export default function BrowsePage() {
     (patch: Partial<BrowseState>, replace = false) => {
       const next = { ...state, ...patch };
       if (!('page' in patch)) next.page = 1;
-      setSearchParams(toParams(next), { replace });
+      // On a hub, a new order or page stays on it and a filter change opens
+      // Browse, the order carried over (hubChangeTarget). keepScroll: a filter
+      // change is not a new page, even when it moves you to another path.
+      const target = hub
+        ? hubChangeTarget(hub, next, DEFAULT_BROWSE_SORT)
+        : `/browse${browseSearch(next, DEFAULT_BROWSE_SORT)}`;
+      navigate(target, { replace, state: { keepScroll: true } });
     },
-    [state, setSearchParams]
+    [state, hub, navigate]
   );
 
+  // Another spelling of a hub (/seasons/Autumn-2026) is shown at its own path.
+  // Served pages are redirected before they get here; this covers links
+  // followed inside the app.
   useEffect(() => {
+    if (hub && listPath !== pathname) navigate(`${listPath}${search}`, { replace: true });
+  }, [hub, listPath, pathname, search, navigate]);
+
+  useEffect(() => {
+    // The served page already holds this exact view.
+    if (skipFirstFetch.current) {
+      skipFirstFetch.current = false;
+      return;
+    }
     const requestId = ++requestRef.current;
     setLoading(true);
     setFailed(false);
@@ -152,11 +224,12 @@ export default function BrowsePage() {
             sort: selectedSort,
           },
           page,
-          PAGE_SIZE
+          pageSize
         );
 
         if (requestId !== requestRef.current) return;
         setAnimeList(result.data);
+        if (hub && page === 1 && selectedSort === defaultSort) setIntroSource({ path: listPath, items: result.data });
         setTotalCount(result.totalCount);
         setTotalPages(result.totalPages);
         setHasMore(result.hasMore);
@@ -184,6 +257,7 @@ export default function BrowsePage() {
     selectedSort,
     queryParam,
     page,
+    pageSize,
     retryToken,
   ]);
 
@@ -192,6 +266,10 @@ export default function BrowsePage() {
   useEffect(() => {
     if (page > 1) window.scrollTo({ top: 0, behavior: 'smooth' });
   }, [page]);
+
+  // A hub the server marked thin, or one that turned out empty, is kept out
+  // of search here too — this page's own navigation can reach either.
+  useNoIndex(Boolean(hub) && (!servedIndexable || (!loading && !failed && animeList.length === 0)));
 
   const handlePageChange = (newPage: number) => {
     if (newPage < 1 || newPage === page) return;
@@ -246,7 +324,7 @@ export default function BrowsePage() {
     if (failed) return 'Could not load results';
     if (queryParam) return `Results for "${queryParam}"`;
     if (totalCount !== null && totalCount > 0) {
-      return `Showing ${(page - 1) * PAGE_SIZE + 1}–${Math.min(page * PAGE_SIZE, totalCount)} of ${totalCount} entries`;
+      return `Showing ${(page - 1) * pageSize + 1}–${Math.min(page * pageSize, totalCount)} of ${totalCount} entries`;
     }
     // Live rankings have no trustworthy total, so the page number is stated
     // plainly instead of inventing a count to divide.
@@ -406,6 +484,8 @@ export default function BrowsePage() {
     </div>
   );
 
+  if (missingHub) return <NotFoundPage />;
+
   return (
     <div className="min-h-screen bg-background pb-20 lg:pb-8 overflow-x-hidden">
       <div className="mx-auto max-w-7xl px-3 sm:px-4 md:px-6 lg:px-8 py-4 sm:py-6 md:py-8">
@@ -424,7 +504,7 @@ export default function BrowsePage() {
                   className="mb-1 text-2xl sm:text-3xl md:text-4xl text-foreground"
                   style={{ fontFamily: 'Anton, Impact, sans-serif' }}
                 >
-                  {PAGES.browse.heading}
+                  {hub ? hubHeading(hub, { sort: selectedSort, now }) : PAGES.browse.heading}
                 </h1>
                 <p
                   className="text-xs sm:text-sm text-muted-foreground"
@@ -465,6 +545,13 @@ export default function BrowsePage() {
             </button>
           </div>
         </motion.div>
+
+        {hub && (
+          <>
+            <HubIntro intro={hubIntro(hub, introItems, now)} linksLabel={hubLinksLabel(hub)} links={extras.links} />
+            {hub.kind === 'airing' && <AiringSchedule entries={extras.schedule} />}
+          </>
+        )}
 
         <div className="flex flex-col lg:flex-row gap-4 lg:gap-8">
           {/* Sidebar Filters - Desktop */}

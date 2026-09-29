@@ -39,14 +39,21 @@ export function ExtraFacts({ anime }: { anime: Anime }) {
   if (!facts.length) return null;
   return (
     <>
-      {facts.map((fact: { label: string; value: string }) => (
+      {facts.map((fact: { label: string; value: string; path?: string }) => (
         <span
           key={fact.label}
           title={fact.label}
           className="text-xs text-muted-foreground border-l border-ink/20 pl-2 sm:pl-3"
           style={outfit}
         >
-          {fact.value}
+          {/* The season links its season's page, as the served page does. */}
+          {fact.path ? (
+            <Link to={fact.path} className="underline decoration-ink/30 underline-offset-2 hover:text-crimson">
+              {fact.value}
+            </Link>
+          ) : (
+            fact.value
+          )}
         </span>
       ))}
     </>

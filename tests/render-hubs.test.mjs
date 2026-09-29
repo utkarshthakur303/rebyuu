@@ -126,6 +126,7 @@ test('an unknown season, an impossible year, or a season with no shows is a 404'
     const res = await season(key);
     assert.equal(res.statusCode, 404, key);
     assert.equal(robotsOf(res.body), 'noindex, follow', key);
+    assert.equal(titleOf(res.body), 'Nothing listed here · Rebyuu', key);
   }
 });
 

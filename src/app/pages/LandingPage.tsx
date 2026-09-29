@@ -5,6 +5,9 @@ import { AnimeCard } from '@/app/components/AnimeCard';
 import { HeroSection } from '@/app/components/HeroSection';
 import { getTrendingAnime, getFanFavorites, getAiringNow, getUpcoming, type Anime } from '@/services/anime';
 import { useAuth } from '@/context/AuthContext';
+// The Airing and Upcoming rails continue on their hub pages, which open in
+// the same order (trending, most popular) — see api/_hubs.js.
+import { hubPath } from '../../../api/_hubs.js';
 
 /** Cards per homepage section — 8 fills exactly two rows on the 4-up grid. */
 const SECTION_SIZE = 8;
@@ -153,7 +156,7 @@ export default function LandingPage() {
         title="Airing Now"
         subtitle="Currently broadcasting"
         items={airingNow}
-        viewMoreTo="/browse?status=airing&sort=trending"
+        viewMoreTo={hubPath({ kind: 'airing' })}
       />
 
       <div className="mx-auto max-w-7xl px-6 lg:px-8">
@@ -164,7 +167,7 @@ export default function LandingPage() {
         title="Upcoming"
         subtitle="Anticipated releases"
         items={upcoming}
-        viewMoreTo="/browse?status=upcoming&sort=popularity"
+        viewMoreTo={hubPath({ kind: 'upcoming' })}
       />
 
       {/* ═══ POPULAR GENRES ═══ */}
