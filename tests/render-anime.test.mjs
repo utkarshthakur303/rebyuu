@@ -120,6 +120,19 @@ test('a title page lists the services it streams on, linked', async () => {
   assert.match(where, /<a href="https:\/\/www.netflix.com\/title\/1" rel="noopener">Netflix<\/a>/);
 });
 
+test('a stored streaming link with a non-web URL is never rendered as a link', async () => {
+  const tampered = { ...detailed, streaming: [{ site: 'Evil', url: 'javascript:alert(1)' }, { site: 'Netflix', url: 'https://www.netflix.com/title/1' }] };
+  installFetch({ tables: { anime_index: [tampered], ratings: [] } });
+
+  const { body } = await render(handler, 'route=anime&ref=1-target-show');
+
+  // The raw row still travels in the inert JSON handed to React, which filters
+  // it through the same streamingLinks; what matters is that no href carries it.
+  assert.doesNotMatch(body, /href="javascript:/i);
+  assert.doesNotMatch(section(rootOf(body), 'Where to watch Target Show'), /Evil/);
+  assert.match(section(rootOf(body), 'Where to watch Target Show'), /Netflix/);
+});
+
 test('extra facts appear in the fact list', async () => {
   installFetch({ tables: { anime_index: [detailed], ratings: [] } });
 

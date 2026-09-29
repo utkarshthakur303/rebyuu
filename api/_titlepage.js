@@ -37,7 +37,14 @@ const joinWords = (items) =>
 
 const article = (word) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
 
-const hasStreaming = (row) => Array.isArray(row.streaming) && row.streaming.length > 0;
+/**
+ * The streaming links safe to put in an href: http(s) only. The sync already
+ * filters them; this holds for rows written before it did, or by anything else.
+ */
+export const streamingLinks = (row) =>
+  (Array.isArray(row.streaming) ? row.streaming : []).filter((l) => l && l.site && /^https?:\/\//i.test(String(l.url || '')));
+
+const hasStreaming = (row) => streamingLinks(row).length > 0;
 
 /** What the title is, in words: film, special, series, or just anime. */
 function kindOf(row) {
@@ -150,7 +157,7 @@ function clip(text, max) {
  * to publish (MIN_RATINGS_FOR_SCORE in render.js).
  */
 export function metaDescription(row, { community = null } = {}) {
-  const services = hasStreaming(row) ? [...new Set(row.streaming.map((l) => l.site))].slice(0, 3) : [];
+  const services = [...new Set(streamingLinks(row).map((l) => l.site))].slice(0, 3);
   // Whole sentences, in priority order, while they fit; then as much of the
   // synopsis as is worth showing. A sentence cut off mid-list ("…Netflix and
   // Hu…") reads worse than one left out.

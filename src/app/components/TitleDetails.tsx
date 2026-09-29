@@ -8,6 +8,7 @@ import {
   formatAiring,
   relationGroups,
   quickAnswers,
+  streamingLinks,
 } from '../../../api/_titlepage.js';
 
 /**
@@ -53,7 +54,7 @@ export function ExtraFacts({ anime }: { anime: Anime }) {
 }
 
 export function WhereToWatch({ anime }: { anime: Anime }) {
-  const links = anime.streaming ?? [];
+  const links: { site: string; url: string }[] = streamingLinks(anime);
   if (!links.length) return null;
   return (
     <motion.section {...reveal} className="rounded-lg border border-ink/20 bg-card p-4 sm:p-6">

@@ -78,6 +78,18 @@ test('streaming links are the STREAMING entries only, one per service', () => {
   ]);
 });
 
+test('a streaming link that is not an http(s) URL is dropped', () => {
+  const row = toRow({
+    ...frieren,
+    externalLinks: [
+      { site: 'Bad', url: 'javascript:alert(1)', type: 'STREAMING' },
+      { site: 'Also bad', url: 'data:text/html,hi', type: 'STREAMING' },
+      { site: 'Crunchyroll', url: 'http://www.crunchyroll.com/one-piece', type: 'STREAMING' },
+    ],
+  });
+  assert.deepEqual(row.streaming, [{ site: 'Crunchyroll', url: 'http://www.crunchyroll.com/one-piece' }]);
+});
+
 test('relations keep anime seasons and side stories, not manga or music videos, sequels first', () => {
   assert.deepEqual(toRow(frieren).relations, [
     { id: 'anilist-182255', relation: 'SEQUEL', title: 'Frieren: Beyond Journey’s End Season 2', year: 2026, format: 'TV' },

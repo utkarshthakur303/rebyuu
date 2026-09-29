@@ -39,11 +39,14 @@ const RELATION_ORDER = ['PREQUEL', 'SEQUEL', 'PARENT', 'ALTERNATIVE', 'SPIN_OFF'
 const MAX_SIDE_RELATIONS = 8;
 const SIDE_RELATIONS = new Set(['SPIN_OFF', 'SIDE_STORY']);
 
+/** Only web URLs: a link's scheme comes from upstream data and lands in an href. */
+const isWebUrl = (url) => /^https?:\/\//i.test(String(url || ''));
+
 function streamingLinks(links) {
   const seen = new Set();
   const out = [];
   for (const link of links || []) {
-    if (link?.type !== 'STREAMING' || !link.url || !link.site || seen.has(link.site)) continue;
+    if (link?.type !== 'STREAMING' || !isWebUrl(link.url) || !link.site || seen.has(link.site)) continue;
     seen.add(link.site);
     out.push({ site: link.site, url: link.url });
   }

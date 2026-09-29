@@ -8,7 +8,7 @@ import {
 } from './_episodes.js';
 import {
   titleTag, metaDescription, otherNames, nameLang,
-  titleFacts, nextEpisode, formatAiring, relationGroups, quickAnswers,
+  titleFacts, nextEpisode, formatAiring, relationGroups, quickAnswers, streamingLinks,
 } from './_titlepage.js';
 
 /**
@@ -659,7 +659,7 @@ const DD = 'style="display:inline;margin:0"';
 
 /** "Where to watch <title>": the streaming services AniList lists, linked. */
 function renderWhereToWatch(row) {
-  const links = Array.isArray(row.streaming) ? row.streaming : [];
+  const links = streamingLinks(row);
   if (!links.length) return '';
   const title = escapeHtml(row.title || 'Untitled');
   return `
