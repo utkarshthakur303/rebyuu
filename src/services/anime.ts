@@ -11,6 +11,7 @@ import {
 } from './anilist';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from '../../api/_related.js';
 import { episodeActivity } from '../../api/_episodes.js';
+import { GENRES, SEASONS, EXCLUDED_GENRES } from '../../api/_catalog.js';
 
 export interface Anime {
   id: string;
@@ -407,45 +408,9 @@ export async function getRandomActionAnime(poolSize: number = 40): Promise<Anime
   return pool;
 }
 
-/**
- * AniList's complete non-adult genre vocabulary, which is what `anime_index`
- * actually stores.
- *
- * The previous list was a hand-picked subset of 13 and silently stranded five
- * whole genres — Mecha alone covers ~900 titles that no filter could reach.
- * Anything not on this list is unreachable in Browse, so it tracks the source
- * vocabulary rather than taste.
- */
-export const genres = [
-  'Action',
-  'Adventure',
-  'Comedy',
-  'Drama',
-  'Ecchi',
-  'Fantasy',
-  'Horror',
-  'Mahou Shoujo',
-  'Mecha',
-  'Music',
-  'Mystery',
-  'Psychological',
-  'Romance',
-  'Sci-Fi',
-  'Slice of Life',
-  'Sports',
-  'Supernatural',
-  'Thriller'
-];
-
-/**
- * Genres withheld from the catalogue.
- *
- * The sync passes `isAdult: false`, but AniList treats that flag as separate
- * from the Hentai tag, so 1,633 explicitly tagged rows made it into the table
- * anyway and were reachable through Browse and search. Filtered at query time
- * rather than at sync time so the rule applies to rows already stored.
- */
-export const EXCLUDED_GENRES = ['Hentai'];
+/** The genres Browse offers, and those it withholds: see api/_catalog.js. */
+export const genres = GENRES;
+export { EXCLUDED_GENRES };
 
 /** Year range offered in the filters, newest first. */
 const CURRENT_YEAR = new Date().getFullYear();
@@ -462,7 +427,7 @@ export const years = Array.from(
   (_, i) => CURRENT_YEAR + 2 - i
 );
 
-export const seasons = ['Winter', 'Spring', 'Summer', 'Fall'];
+export const seasons = SEASONS;
 
 export const statuses = ['all', 'airing', 'completed', 'upcoming'] as const;
 

@@ -11,6 +11,8 @@
  * prequels, and who made it.
  */
 
+import { seasonFromAniList } from '../api/_catalog.js';
+
 /** Added by title_details_migration.sql. Absent until that migration runs. */
 export const DETAIL_COLUMNS = [
   'title_romaji', 'title_english', 'title_native', 'synonyms',
@@ -25,8 +27,6 @@ const STATUS = {
   CANCELLED: 'completed',
   HIATUS: 'airing',
 };
-
-const SEASON = { WINTER: 'Winter', SPRING: 'Spring', SUMMER: 'Summer', FALL: 'Fall' };
 
 /**
  * Relations worth listing on a title page, in the order they are listed:
@@ -84,7 +84,7 @@ export function toRow(m, { details = true } = {}) {
     rating: m.averageScore ? m.averageScore / 10 : null,
     genres: m.genres,
     year: m.startDate.year,
-    season: m.season ? SEASON[m.season] || null : null,
+    season: seasonFromAniList(m.season),
     status: STATUS[m.status] || 'completed',
     episodes: m.episodes,
     description: m.description?.replace(/<[^>]*>/g, '').substring(0, 1000) || null,

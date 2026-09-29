@@ -1,3 +1,5 @@
+import { EXCLUDED_GENRES } from './_catalog.js';
+
 /**
  * "More like this" — which titles a title page recommends.
  *
@@ -23,8 +25,6 @@ export const RELATED_POOL_SIZE = 60;
 
 export const YEAR_WINDOW = 2;
 
-/** Mirrors EXCLUDED_GENRES in services/anime.ts. */
-const EXCLUDED_GENRES = ['Hentai'];
 
 /**
  * The candidate queries for `target`, in priority order. Each pool means:
