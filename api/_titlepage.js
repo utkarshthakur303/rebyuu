@@ -14,6 +14,8 @@
  */
 
 import { animePath } from './_paths.js';
+import { seasonYearOf } from './_catalog.js';
+import { seasonPath, parseHubPath } from './_hubs.js';
 
 const MAX_DESCRIPTION = 160;
 
@@ -220,7 +222,13 @@ const RELATION_LABEL = {
 export function titleFacts(row) {
   const facts = [];
   if (FORMAT_LABEL[row.format]) facts.push({ label: 'Format', value: FORMAT_LABEL[row.format] });
-  if (row.season && row.year) facts.push({ label: 'Season', value: `${row.season} ${row.year}` });
+  const seasonYear = seasonYearOf(row);
+  if (row.season && seasonYear) {
+    // Linked to the season's page, when it can have one (not years ahead).
+    const season = { label: 'Season', value: `${row.season} ${seasonYear}` };
+    const path = seasonPath({ season: row.season, year: seasonYear });
+    facts.push(parseHubPath(path) ? { ...season, path } : season);
+  }
   if (row.studios?.length) facts.push({ label: row.studios.length > 1 ? 'Studios' : 'Studio', value: row.studios.join(', ') });
   if (SOURCE_LABEL[row.source]) facts.push({ label: 'Source', value: SOURCE_LABEL[row.source] });
   if (row.duration) facts.push({ label: 'Episode length', value: `${row.duration} min` });
@@ -304,8 +312,8 @@ export function quickAnswers(row, { now = new Date(), timeZone } = {}) {
   } else if (row.status === 'upcoming') {
     const when = next && next.episode === 1
       ? `${name} premieres on ${formatAiring(next.at, { timeZone })}.`
-      : row.season && row.year
-        ? `${name} is scheduled for ${row.season} ${row.year}.`
+      : row.season && seasonYearOf(row)
+        ? `${name} is scheduled for ${row.season} ${seasonYearOf(row)}.`
         : row.year
           ? `${name} is expected in ${row.year}.`
           : `${name} has not started airing.`;

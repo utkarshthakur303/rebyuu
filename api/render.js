@@ -1,4 +1,10 @@
 import { SHELL } from './_shell.js';
+import { ORIGIN, escapeHtml, stripTags, truncate, renderTitleList, injectHead, injectBody } from './_html.js';
+import { sb, anilist, rankedIds, rowsById } from './_upstream.js';
+import { parseHubPath, hubPath } from './_hubs.js';
+import { HUB_MISSING } from './_hubcopy.js';
+import { loadHub, renderHub, renderHubLinks, HubDataError, LIST_COLUMNS, bootItem } from './_hubpage.js';
+import { EXCLUDED_GENRES } from './_catalog.js';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from './_related.js';
 import { PAGES } from './_pages.js';
 import { animePath, parseAnimeRef } from './_paths.js';
@@ -39,12 +45,6 @@ import {
  * why the detail page could not preload its own LCP element.
  */
 
-const ORIGIN = 'https://www.rebyuu.app';
-const SUPABASE_URL = process.env.VITE_SUPABASE_URL;
-const SUPABASE_KEY = process.env.VITE_SUPABASE_KEY;
-
-const ANILIST_API = 'https://graphql.anilist.co';
-
 /** Minimum first-party ratings before a community score is real enough to publish. */
 const MIN_RATINGS_FOR_SCORE = 3;
 
@@ -77,9 +77,6 @@ const BROWSE_PAGE_SIZE = 24;
 /** Written pages rendered from their shared copy in _pages.js. */
 const PROSE_ROUTES = ['about', 'terms', 'privacy'];
 
-/** A slow AniList must not hold a crawler's request open; the archive fallback is fine. */
-const ANILIST_TIMEOUT_MS = 2500;
-
 /**
  * True when the request carries query parameters the renderer does not read:
  * fbclid, gclid, utm_*, or a /browse filter. The query string rides along on
@@ -89,72 +86,8 @@ const ANILIST_TIMEOUT_MS = 2500;
  * get the page's head and heading without the live title lists, rather than
  * waiting on AniList for links no crawler should be collecting from them.
  */
-const INTERNAL_PARAMS = new Set(['route', 'id', 'ref', 'ep']);
+const INTERNAL_PARAMS = new Set(['route', 'id', 'ref', 'ep', 'hub', 'key']);
 const isVariant = (url) => [...url.searchParams.keys()].some((k) => !INTERNAL_PARAMS.has(k));
-
-const escapeHtml = (s) =>
-  String(s ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-
-/** AniList synopses carry HTML. Strip it, collapse whitespace, keep the words. */
-const stripTags = (s) =>
-  String(s ?? '')
-    .replace(/<br\s*\/?>/gi, ' ')
-    .replace(/<[^>]*>/g, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const truncate = (s, n) => {
-  const t = stripTags(s);
-  if (t.length <= n) return t;
-  const cut = t.slice(0, n);
-  const lastSpace = cut.lastIndexOf(' ');
-  return (lastSpace > n * 0.6 ? cut.slice(0, lastSpace) : cut).replace(/[,;:.\s]+$/, '') + '…';
-};
-
-/**
- * JSON-LD is injected inside a <script> tag, so the one character that must
- * never survive is the sequence that could close it early.
- */
-const jsonLd = (obj) =>
-  JSON.stringify(obj).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
-
-async function sb(path) {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
-  try {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-      headers: { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` },
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
-}
-
-/** Resolves to the GraphQL `data` object, or null on any failure. */
-async function anilist(query) {
-  try {
-    const res = await fetch(ANILIST_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-      body: JSON.stringify({ query }),
-      signal: AbortSignal.timeout(ANILIST_TIMEOUT_MS),
-    });
-    if (!res.ok) return null;
-    const json = await res.json();
-    return json.errors ? null : json.data ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** anime_index ids for an AniList `Page { media { id } }`, in ranking order. */
-const rankedIds = (pageData) => (pageData?.media ?? []).map((m) => `anilist-${m.id}`);
 
 /** Comments shown on an episode page, newest first. */
 const THREAD_SIZE = 20;
@@ -180,34 +113,28 @@ async function loadEpisodeActivity(id) {
   return episodeActivity(Array.isArray(comments) ? comments : [], Array.isArray(ratings) ? ratings : []);
 }
 
-/** One anime_index read for a set of ids, as a Map keyed by id. */
-async function rowsById(ids) {
-  const unique = [...new Set(ids)];
-  const rows = unique.length
-    ? await sb(`anime_index?id=in.(${unique.join(',')})&select=id,title,year`)
-    : [];
-  return new Map((Array.isArray(rows) ? rows : []).map((row) => [row.id, row]));
-}
-
 /**
  * The first page of /browse as it opens with no filters: live AniList
  * trending, 24 titles (PAGE_SIZE in BrowsePage.tsx), Hentai excluded as
  * EXCLUDED_GENRES does there. Unlike the React page, which renders AniList's
  * own records, ids missing from anime_index are dropped here — a served link
  * to one of those would be a link to a 404. Falls back to the archive ordered
- * by stored rating, as fetchArchiveBrowsePage does.
+ * by stored rating, as fetchArchiveBrowsePage does. `live` says which it is:
+ * only the live list is the one React would show, and so handed to it.
  */
 async function loadBrowseFirstPage() {
   const ranked = await anilist(`query {
-  browse: Page(page: 1, perPage: ${BROWSE_PAGE_SIZE}) { media(type: ANIME, sort: [TRENDING_DESC], genre_not_in: ["Hentai"], isAdult: false) { id } }
+  browse: Page(page: 1, perPage: ${BROWSE_PAGE_SIZE}) { media(type: ANIME, sort: [TRENDING_DESC], genre_not_in: ${JSON.stringify(EXCLUDED_GENRES)}, isAdult: false) { id } }
 }`);
   const ids = rankedIds(ranked?.browse);
-  const byId = await rowsById(ids);
+  const byId = await rowsById(ids, LIST_COLUMNS);
   const items = ids.map((id) => byId.get(id)).filter(Boolean);
-  if (items.length) return items;
+  if (items.length) return { items, live: true };
 
-  const fallback = await sb(`anime_index?select=id,title,year&order=rating.desc.nullslast&limit=${BROWSE_PAGE_SIZE}`);
-  return Array.isArray(fallback) ? fallback : [];
+  const fallback = await sb(
+    `anime_index?select=${LIST_COLUMNS}&genres=not.ov.{${EXCLUDED_GENRES.join(',')}}&order=rating.desc.nullslast,id.asc&limit=${BROWSE_PAGE_SIZE}`
+  );
+  return { items: Array.isArray(fallback) ? fallback : [], live: false };
 }
 
 /**
@@ -259,84 +186,6 @@ async function loadRelated(row) {
   return picked;
 }
 
-/** A heading plus a plain ordered list of title links. Empty rails render nothing. */
-function renderTitleList({ heading, subtitle, items }) {
-  if (!items.length) return '';
-  const lis = items
-    .map((row) =>
-      `<li><a href="${escapeHtml(animePath(row))}">${escapeHtml(row.title || 'Untitled')}</a>${row.year ? ` <span style="opacity:.6">(${escapeHtml(String(row.year))})</span>` : ''}</li>`
-    )
-    .join('\n          ');
-  return `
-      <section style="margin-top:36px">
-        <h2 style="font-family:Anton,Impact,sans-serif;font-size:26px;line-height:1.1">${escapeHtml(heading)}</h2>
-        ${subtitle ? `<p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:12px;letter-spacing:.15em;text-transform:uppercase;opacity:.6;margin-top:4px">${escapeHtml(subtitle)}</p>` : ''}
-        <ol style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.9;margin-top:10px;padding-left:1.4em">
-          ${lis}
-        </ol>
-      </section>`;
-}
-
-/**
- * Every indexable page allows large image previews: without this directive
- * Google shows at most a thumbnail, and in Discover — a large source of anime
- * traffic — a thumbnail-only card barely gets shown at all. Pages that set
- * their own robots value (noindex) replace it.
- */
-const DEFAULT_ROBOTS = 'max-image-preview:large';
-
-/** Replaces the shell's single shared title/description with this route's. */
-function injectHead(html, { title, description, canonical, image, preload = image, ld, robots }) {
-  const tags = [
-    `<title>${escapeHtml(title)}</title>`,
-    `<meta name="description" content="${escapeHtml(description)}" />`,
-    `<link rel="canonical" href="${escapeHtml(canonical)}" />`,
-    `<meta property="og:title" content="${escapeHtml(title)}" />`,
-    `<meta property="og:description" content="${escapeHtml(description)}" />`,
-    `<meta property="og:url" content="${escapeHtml(canonical)}" />`,
-    `<meta property="og:type" content="website" />`,
-    `<meta property="og:site_name" content="Rebyuu" />`,
-    `<meta name="twitter:card" content="summary_large_image" />`,
-    `<meta name="twitter:title" content="${escapeHtml(title)}" />`,
-    `<meta name="twitter:description" content="${escapeHtml(description)}" />`,
-  ];
-  if (image) {
-    tags.push(`<meta property="og:image" content="${escapeHtml(image)}" />`);
-    tags.push(`<meta name="twitter:image" content="${escapeHtml(image)}" />`);
-  }
-  // Lets the browser start the LCP fetch during head parse, before the
-  // bundle has run — impossible while the URL was only knowable in JS.
-  // `preload` is the image the page paints first, which is not always the
-  // share image: a title page shares its poster but paints its banner.
-  if (preload) tags.push(`<link rel="preload" as="image" href="${escapeHtml(preload)}" fetchpriority="high" />`);
-  tags.push(`<meta name="robots" content="${escapeHtml(robots || DEFAULT_ROBOTS)}" />`);
-  if (ld) tags.push(`<script type="application/ld+json">${jsonLd(ld)}</script>`);
-
-  // Drop the shell's generic tags so the document never carries two of any.
-  let out = html
-    .replace(/<title>[\s\S]*?<\/title>/i, '')
-    .replace(/<meta\s+name="description"[^>]*>/gi, '')
-    .replace(/<meta\s+property="og:title"[^>]*>/gi, '')
-    .replace(/<meta\s+property="og:description"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:title"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:description"[^>]*>/gi, '')
-    .replace(/<meta\s+name="twitter:card"[^>]*>/gi, '');
-
-  return out.replace('</head>', `${tags.join('\n    ')}\n  </head>`);
-}
-
-/**
- * Injected into #root. React clears this on mount. `boot` is data the page
- * was built from, handed to React after #root so its first render can use it
- * instead of fetching it again (see takeBoot in services/anime.ts).
- */
-function injectBody(html, content, boot = null) {
-  const data = boot ? `\n    <script id="rebyuu-boot" type="application/json">${jsonLd(boot)}</script>` : '';
-  return html
-    .replace('<div id="root"></div>', `<div id="root">${content}</div>`)
-    .replace('</body>', `${data}\n  </body>`);
-}
-
 /**
  * The title reference the request was made with: `ref` from the canonical
  * route (/anime/154587-frieren-…), or `id` from the original one
@@ -357,12 +206,19 @@ function redirect(res, path) {
   res.status(301).send('');
 }
 
-function send(res, status, html) {
+/**
+ * Rendered HTML is cached at the edge so a crawl of 6,165 URLs does not
+ * become 6,165 database round trips. Content changes only when the nightly
+ * sync runs, so an hour of freshness is generous.
+ */
+const PAGE_CACHE = 'public, s-maxage=3600, stale-while-revalidate=86400';
+
+/** The airing schedule goes out of date by the hour, so /airing is served fresher. */
+const AIRING_CACHE = 'public, s-maxage=900, stale-while-revalidate=3600';
+
+function send(res, status, html, cache = PAGE_CACHE) {
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
-  // Rendered HTML is cached at the edge so a crawl of 6,165 URLs does not
-  // become 6,165 database round trips. Content changes only when the nightly
-  // sync runs, so an hour of freshness is generous.
-  res.setHeader('Cache-Control', 'public, s-maxage=3600, stale-while-revalidate=86400');
+  res.setHeader('Cache-Control', cache);
   res.status(status).send(html);
 }
 
@@ -412,6 +268,7 @@ function renderHome(rails = []) {
         <a href="/browse">Browse the catalogue</a> · <a href="/about">About Rebyuu and its sources</a>
       </p>
       ${rails.map(renderTitleList).join('')}
+      ${renderHubLinks()}
     </main>`;
 
   let html = injectHead(SHELL, {
@@ -550,7 +407,7 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
       ${year ? `<div><dt style="display:inline;font-weight:600">Year: </dt><dd style="display:inline;margin:0">${escapeHtml(year)}</dd></div>` : ''}
       <div><dt style="display:inline;font-weight:600">Status: </dt><dd style="display:inline;margin:0">${escapeHtml(statusWord)}</dd></div>
       ${row.episodes ? `<div><dt style="display:inline;font-weight:600">Episodes: </dt><dd style="display:inline;margin:0">${escapeHtml(String(row.episodes))}</dd></div>` : ''}
-      ${titleFacts(row).map((f) => `<div><dt style="display:inline;font-weight:600">${escapeHtml(f.label)}: </dt><dd style="display:inline;margin:0">${escapeHtml(f.value)}</dd></div>`).join('\n      ')}
+      ${titleFacts(row).map((f) => `<div><dt style="display:inline;font-weight:600">${escapeHtml(f.label)}: </dt><dd style="display:inline;margin:0">${f.path ? `<a href="${escapeHtml(f.path)}">${escapeHtml(f.value)}</a>` : escapeHtml(f.value)}</dd></div>`).join('\n      ')}
       ${genres.length ? `<div><dt style="display:inline;font-weight:600">Genres: </dt><dd style="display:inline;margin:0">${escapeHtml(genres.join(', '))}</dd></div>` : ''}
       ${row.rating != null ? `<div><dt style="display:inline;font-weight:600">AniList score: </dt><dd style="display:inline;margin:0">${escapeHtml(Number(row.rating).toFixed(1))}/10</dd></div>` : ''}
       ${community && community.count >= MIN_RATINGS_FOR_SCORE
@@ -605,13 +462,14 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
  * correct for them: they canonicalise to /browse and robots.txt keeps
  * crawlers out of them. React renders the filtered grid on mount.
  */
-function renderBrowse(items) {
+function renderBrowse({ items, live }) {
   const meta = PAGES.browse;
   const content = `
     <main class="mx-auto max-w-3xl px-4 py-16">
       <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,44px);line-height:1">${escapeHtml(meta.heading)}</h1>
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:17px;line-height:1.7;margin-top:14px">${escapeHtml(meta.description)}</p>
       ${renderTitleList({ heading: 'Trending now', items })}
+      ${renderHubLinks()}
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;margin-top:24px"><a href="/">Home</a> · <a href="/about">About Rebyuu and its sources</a></p>
     </main>`;
 
@@ -621,9 +479,13 @@ function renderBrowse(items) {
       description: meta.description,
       canonical: `${ORIGIN}${meta.path}`,
     }),
-    content
+    content,
+    // The unfiltered trending list is the one React's /browse opens on, so it
+    // is handed over (readBootList); trending always has another page.
+    live && items.length ? { list: { path: meta.path, items: items.map(bootItem), hasMore: true, live: true } } : null
   );
 }
+
 
 /**
  * About, Terms and Privacy: the header block ProsePage renders — eyebrow,
@@ -835,27 +697,67 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
 }
 
 /** A well-formed id with no row behind it is a genuine 404, not a soft one. */
-function renderMissing() {
+function renderMissing({ heading = 'Not in the archive', text = 'This title is not in the Rebyuu catalogue.' } = {}) {
   return injectHead(
     injectBody(SHELL, `
       <main class="mx-auto max-w-3xl px-4 py-16" style="text-align:center">
-        <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,48px)">Not in the archive</h1>
-        <p style="font-family:Outfit,ui-sans-serif,sans-serif">This title is not in the Rebyuu catalogue.</p>
+        <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,48px)">${escapeHtml(heading)}</h1>
+        <p style="font-family:Outfit,ui-sans-serif,sans-serif">${escapeHtml(text)}</p>
         <p style="font-family:Outfit,ui-sans-serif,sans-serif"><a href="/browse">Browse the catalogue</a></p>
       </main>`),
     {
-      title: 'Not in the archive · Rebyuu',
-      description: 'This title is not in the Rebyuu catalogue.',
+      title: `${heading} · Rebyuu`,
+      description: text,
       canonical: `${ORIGIN}/browse`,
       robots: 'noindex, follow',
     }
   );
 }
 
+/**
+ * The catalogue can't be read right now. 503 tells crawlers to come back
+ * rather than record an empty page; the body is the app shell, so a visitor
+ * still gets the page, rendered in the browser.
+ */
+function unavailable(res) {
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Retry-After', '600');
+  res.status(503).send(SHELL);
+}
+
+/** The path a hub rewrite came from; vercel.json passes the hub's kind and key. */
+const HUB_PATHS = {
+  season: (key) => `/seasons/${key}`,
+  airing: () => '/airing',
+  upcoming: () => '/upcoming',
+};
+const hubPathname = (kind, key) => HUB_PATHS[kind]?.(key ?? '') ?? null;
+
+/** /seasons/fall-2026, /airing, /upcoming — see _hubs.js and _hubpage.js. */
+async function serveHub(res, url) {
+  const pathname = hubPathname(url.searchParams.get('hub'), url.searchParams.get('key'));
+  const hub = pathname ? parseHubPath(pathname) : null;
+  if (!hub) return send(res, 404, renderMissing(HUB_MISSING));
+  if (hubPath(hub) !== pathname) return redirect(res, hubPath(hub));
+
+  let data;
+  try {
+    data = await loadHub(hub);
+  } catch (err) {
+    if (err instanceof HubDataError) return unavailable(res);
+    throw err;
+  }
+  if (!data.items.length) return send(res, 404, renderMissing(HUB_MISSING));
+  return send(res, 200, renderHub(hub, data), hub.kind === 'airing' ? AIRING_CACHE : PAGE_CACHE);
+}
+
 export default async function handler(req, res) {
   try {
     const url = new URL(req.url, ORIGIN);
     const route = url.searchParams.get('route');
+
+    if (route === 'hub') return await serveHub(res, url);
 
     if (route === 'anime') {
       const requested = requestedRef(url);
@@ -933,7 +835,7 @@ export default async function handler(req, res) {
     }
 
     const variant = isVariant(url);
-    if (route === 'browse') return send(res, 200, renderBrowse(variant ? [] : await loadBrowseFirstPage()));
+    if (route === 'browse') return send(res, 200, renderBrowse(variant ? { items: [], live: false } : await loadBrowseFirstPage()));
     if (PROSE_ROUTES.includes(route)) return send(res, 200, renderProse(PAGES[route]));
 
     return send(res, 200, renderHome(variant ? [] : await loadHomeRails()));

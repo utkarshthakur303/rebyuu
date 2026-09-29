@@ -3,7 +3,9 @@ dotenv.config({ path: ".env" });
 import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
 import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
-import { toRow, DETAIL_COLUMNS } from './animeRow.mjs';
+import { toRow, DETAIL_COLUMNS, SEASON_YEAR_COLUMNS } from './animeRow.mjs';
+import { recheckBatches, RECHECK_BATCH } from './recheck.mjs';
+import { seasonPasses } from './passes.mjs';
 import { animePath } from '../api/_paths.js';
 const ANILIST_API = 'https://graphql.anilist.co';
 
@@ -12,14 +14,14 @@ const ANILIST_API = 'https://graphql.anilist.co';
 // their columns has run. Measured on a live 50-title page: ~1.6 s, ~150-200 KB,
 // well inside AniList's complexity limit.
 const ANILIST_QUERY = `
-  query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus) {
+  query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $ids: [Int], $season: MediaSeason, $seasonYear: Int) {
     Page(page: $page, perPage: $perPage) {
       pageInfo {
         total
         currentPage
         hasNextPage
       }
-      media(type: ANIME, sort: $sort, status: $status, isAdult: false) {
+      media(type: ANIME, sort: $sort, status: $status, id_in: $ids, season: $season, seasonYear: $seasonYear, isAdult: false) {
         id
         idMal
         title {
@@ -37,6 +39,7 @@ const ANILIST_QUERY = `
           year
         }
         season
+        seasonYear
         status
         episodes
         description
@@ -83,21 +86,37 @@ type AniListMedia = { id: number } & Record<string, unknown>;
 /** Which columns this run writes, decided once from the live schema. */
 interface Schema {
   details: boolean;
+  seasonYear: boolean;
   columns: string[];
 }
 
+/** Null when `columns` all exist, else the database's reason they don't. */
+async function missingColumns(supabase: ReturnType<typeof createClient>, columns: string[]): Promise<string | null> {
+  const { error } = await supabase.from('anime_index').select(columns.join(',')).limit(1);
+  return error ? error.message : null;
+}
+
 /**
- * The detail columns exist only once supabase/title_details_migration.sql has
- * been run. Until then the sync keeps writing the original columns, so
- * deploying this before the migration changes nothing.
+ * Each migration's columns are checked for separately and written only once
+ * they exist, so deploying this before a migration runs changes nothing, and
+ * a missing season_year never costs the detail columns.
  */
 async function detectSchema(supabase: ReturnType<typeof createClient>): Promise<Schema> {
-  const { error } = await supabase.from('anime_index').select(DETAIL_COLUMNS.join(',')).limit(1);
-  if (error) {
-    console.log(`Detail columns not found (${error.message}). Writing base columns only — run supabase/title_details_migration.sql to enable them.`);
-    return { details: false, columns: SYNCED_COLUMNS };
+  const detailsMissing = await missingColumns(supabase, DETAIL_COLUMNS);
+  if (detailsMissing) {
+    console.log(`Detail columns not found (${detailsMissing}). Skipping them — run supabase/title_details_migration.sql to enable them.`);
   }
-  return { details: true, columns: [...SYNCED_COLUMNS, ...DETAIL_COLUMNS] };
+  const seasonYearMissing = await missingColumns(supabase, SEASON_YEAR_COLUMNS);
+  if (seasonYearMissing) {
+    console.log(`season_year not found (${seasonYearMissing}). Skipping it — run supabase/season_year_migration.sql to enable it.`);
+  }
+  const details = !detailsMissing;
+  const seasonYear = !seasonYearMissing;
+  return {
+    details,
+    seasonYear,
+    columns: [...SYNCED_COLUMNS, ...(details ? DETAIL_COLUMNS : []), ...(seasonYear ? SEASON_YEAR_COLUMNS : [])],
+  };
 }
 
 type AniListSort = 'POPULARITY_DESC' | 'TRENDING_DESC' | 'START_DATE_DESC';
@@ -115,7 +134,9 @@ async function fetchAniListPage(
   page: number,
   perPage: number = 50,
   sort: AniListSort = 'POPULARITY_DESC',
-  status?: AniListStatus
+  status?: AniListStatus,
+  ids?: number[],
+  season?: { season: string; seasonYear: number }
 ): Promise<{ data: AniListMedia[]; hasNextPage: boolean }> {
   for (let attempt = 0; attempt < 5; attempt++) {
     const response = await fetch(ANILIST_API, {
@@ -126,7 +147,7 @@ async function fetchAniListPage(
       },
       body: JSON.stringify({
         query: ANILIST_QUERY,
-        variables: { page, perPage, sort: [sort], status }
+        variables: { page, perPage, sort: [sort], status, ids, ...season }
       })
     });
 
@@ -162,7 +183,7 @@ async function syncAnimeToSupabase(
   media: AniListMedia[],
   schema: Schema
 ): Promise<string[]> {
-  const animeData = media.map((m) => toRow(m, { details: schema.details }));
+  const animeData = media.map((m) => toRow(m, { details: schema.details, seasonYear: schema.seasonYear }));
 
   // Read the rows as they stand, so only titles that really changed are
   // written (keeping updated_at, and so the sitemap's lastmod, truthful) and
@@ -192,6 +213,9 @@ interface Pass {
   label: string;
   sort: AniListSort;
   status?: AniListStatus;
+  /** AniList's season enum and season year, for a pass over one whole season. */
+  season?: string;
+  seasonYear?: number;
   maxPages: number;
 }
 
@@ -219,16 +243,21 @@ async function runPass(
   supabase: ReturnType<typeof createClient>,
   pass: Pass,
   schema: Schema,
-  changed: Set<string>
+  changed: Set<string>,
+  seen: Set<string>
 ): Promise<number> {
   console.log(`\n── pass: ${pass.label} (${pass.sort}${pass.status ? ' / ' + pass.status : ''}) ──`);
   let synced = 0;
 
   for (let page = 1; page <= pass.maxPages; page++) {
     try {
-      const { data, hasNextPage } = await fetchAniListPage(page, 50, pass.sort, pass.status);
+      const { data, hasNextPage } = await fetchAniListPage(
+        page, 50, pass.sort, pass.status, undefined,
+        pass.season && pass.seasonYear ? { season: pass.season, seasonYear: pass.seasonYear } : undefined
+      );
       if (!data.length) break;
 
+      for (const m of data) seen.add(`anilist-${m.id}`);
       for (const path of await syncAnimeToSupabase(supabase, data, schema)) changed.add(path);
       synced += data.length;
       console.log(`  page ${page}: +${data.length} (pass total ${synced})`);
@@ -245,6 +274,54 @@ async function runPass(
   return synced;
 }
 
+/** Every stored row still marked airing or upcoming, a PostgREST page at a time. */
+async function storedLiveRows(supabase: ReturnType<typeof createClient>): Promise<{ id: string }[]> {
+  const rows: { id: string }[] = [];
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('anime_index')
+      .select('id')
+      .in('status', ['airing', 'upcoming'])
+      .order('id')
+      .range(from, from + 999);
+    if (error) throw new Error(`could not read airing and upcoming rows: ${error.message}`);
+    rows.push(...((data ?? []) as { id: string }[]));
+    if (!data || data.length < 1000) return rows;
+  }
+}
+
+/**
+ * Re-fetches, by id, the stored airing and upcoming titles the passes did
+ * not see — the shows that have since finished or started — so their status
+ * and episode data catch up (see recheck.mjs).
+ */
+async function recheckStale(
+  supabase: ReturnType<typeof createClient>,
+  schema: Schema,
+  seen: Set<string>,
+  changed: Set<string>
+): Promise<number> {
+  console.log('\n── recheck: airing and upcoming titles the passes did not fetch ──');
+  const batches = recheckBatches(await storedLiveRows(supabase), seen);
+  let fetched = 0;
+  let asked = 0;
+  for (const ids of batches) {
+    try {
+      const { data } = await fetchAniListPage(1, RECHECK_BATCH, 'POPULARITY_DESC', undefined, ids);
+      for (const path of await syncAnimeToSupabase(supabase, data, schema)) changed.add(path);
+      fetched += data.length;
+      asked += ids.length;
+    } catch (error) {
+      console.error('  recheck batch failed:', error instanceof Error ? error.message : error);
+    }
+    await sleep(REQUEST_INTERVAL_MS);
+  }
+  // A title AniList no longer returns (removed, merged, or now marked adult)
+  // keeps its stored row as it was.
+  console.log(`  rechecked ${fetched} of ${asked} titles in ${batches.length} requests`);
+  return fetched;
+}
+
 async function syncAnime() {
   const supabaseUrl = process.env.VITE_SUPABASE_URL;
   const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.VITE_SUPABASE_KEY;
@@ -255,17 +332,26 @@ async function syncAnime() {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
   const mode = (process.env.SYNC_MODE || 'fresh').toLowerCase();
-  const passes = mode === 'full' ? FULL_PASSES : FRESH_PASSES;
+  // Every season page's titles are in the catalogue: see passes.mjs.
+  const passes = [...(mode === 'full' ? FULL_PASSES : FRESH_PASSES), ...(seasonPasses() as Pass[])];
 
   console.log(`Starting AniList sync (mode=${mode})...`);
   const schema = await detectSchema(supabase);
   const started = Date.now();
   let total = 0;
   const changed = new Set<string>();
+  const seen = new Set<string>();
 
   for (const pass of passes) {
-    total += await runPass(supabase, pass, schema, changed);
+    total += await runPass(supabase, pass, schema, changed, seen);
     await sleep(REQUEST_INTERVAL_MS);
+  }
+
+  try {
+    total += await recheckStale(supabase, schema, seen, changed);
+  } catch (error) {
+    // The passes' writes stand, and their changes still go to IndexNow.
+    console.error('Recheck skipped:', error instanceof Error ? error.message : error);
   }
 
   const mins = ((Date.now() - started) / 60000).toFixed(1);

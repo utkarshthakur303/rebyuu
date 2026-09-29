@@ -26,6 +26,10 @@
       "destination": "/api/sitemap?kind=episodes"
     },
     {
+      "source": "/sitemap-hubs.xml",
+      "destination": "/api/sitemap?kind=hubs"
+    },
+    {
       "source": "/",
       "destination": "/api/render?route=home"
     },
@@ -60,6 +64,18 @@
     {
       "source": "/privacy",
       "destination": "/api/render?route=privacy"
+    },
+    {
+      "source": "/seasons/:key([A-Za-z]+-\\d{4})",
+      "destination": "/api/render?route=hub&hub=season&key=:key"
+    },
+    {
+      "source": "/airing",
+      "destination": "/api/render?route=hub&hub=airing"
+    },
+    {
+      "source": "/upcoming",
+      "destination": "/api/render?route=hub&hub=upcoming"
     },
     {
       "source": "/anime/:ref(\\d+[A-Za-z0-9-]*)/episode/:ep(\\d+)",

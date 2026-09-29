@@ -11,6 +11,7 @@ import {
 } from './anilist';
 import { relatedPools, rankRelated, RELATED_SIZE, RELATED_POOL_SIZE } from '../../api/_related.js';
 import { episodeActivity } from '../../api/_episodes.js';
+import { GENRES, SEASONS, EXCLUDED_GENRES } from '../../api/_catalog.js';
 
 export interface Anime {
   id: string;
@@ -93,14 +94,6 @@ export async function getAnimeList(filters?: {
 }
 
 /**
- * One title by id.
- *
- * Falls back to AniList when the row isn't in our snapshot, so a suggestion for
- * a newly announced show still opens instead of landing on "not found".
- * `.maybeSingle()` rather than `.single()`: the latter treats "no rows" as an
- * error, which made a miss indistinguishable from a real failure.
- */
-/**
  * The row the prerender built this page from, when it is the title being
  * asked for. api/render.js hands it over in <script id="rebyuu-boot"> so the
  * detail page's first render has it: no second fetch of the same row, and no
@@ -118,6 +111,43 @@ export function readBootAnime(id: string): Anime | null {
   }
 }
 
+/** A hub's or /browse's first page, as the prerender hands it over (api/_hubpage.js, api/render.js). */
+export interface BootList {
+  path: string;
+  /** Null when the server's list was not the one React would show (AniList was down). */
+  items: Anime[] | null;
+  hasMore?: boolean;
+  live?: boolean;
+  indexable?: boolean;
+  links?: { label: string; path: string }[];
+  schedule?: { id: string; title: string | null; episode: number; at: number }[];
+}
+
+/**
+ * The list the prerender built this page from, when this is the page it was
+ * built for: the grid's first render uses it instead of fetching the same
+ * page again, as readBootAnime does for a title. Any other page finds no
+ * match and fetches as before.
+ */
+export function readBootList(path: string): BootList | null {
+  if (typeof document === 'undefined') return null;
+  try {
+    const text = document.getElementById('rebyuu-boot')?.textContent;
+    const data = text ? JSON.parse(text) : null;
+    return data?.list?.path === path ? (data.list as BootList) : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One title by id.
+ *
+ * Falls back to AniList when the row isn't in our snapshot, so a suggestion for
+ * a newly announced show still opens instead of landing on "not found".
+ * `.maybeSingle()` rather than `.single()`: the latter treats "no rows" as an
+ * error, which made a miss indistinguishable from a real failure.
+ */
 export async function getAnimeById(id: string): Promise<Anime | null> {
   const { data, error } = await supabase
     .from('anime_index')
@@ -407,45 +437,9 @@ export async function getRandomActionAnime(poolSize: number = 40): Promise<Anime
   return pool;
 }
 
-/**
- * AniList's complete non-adult genre vocabulary, which is what `anime_index`
- * actually stores.
- *
- * The previous list was a hand-picked subset of 13 and silently stranded five
- * whole genres — Mecha alone covers ~900 titles that no filter could reach.
- * Anything not on this list is unreachable in Browse, so it tracks the source
- * vocabulary rather than taste.
- */
-export const genres = [
-  'Action',
-  'Adventure',
-  'Comedy',
-  'Drama',
-  'Ecchi',
-  'Fantasy',
-  'Horror',
-  'Mahou Shoujo',
-  'Mecha',
-  'Music',
-  'Mystery',
-  'Psychological',
-  'Romance',
-  'Sci-Fi',
-  'Slice of Life',
-  'Sports',
-  'Supernatural',
-  'Thriller'
-];
-
-/**
- * Genres withheld from the catalogue.
- *
- * The sync passes `isAdult: false`, but AniList treats that flag as separate
- * from the Hentai tag, so 1,633 explicitly tagged rows made it into the table
- * anyway and were reachable through Browse and search. Filtered at query time
- * rather than at sync time so the rule applies to rows already stored.
- */
-export const EXCLUDED_GENRES = ['Hentai'];
+/** The genres Browse offers, and those it withholds: see api/_catalog.js. */
+export const genres = GENRES;
+export { EXCLUDED_GENRES };
 
 /** Year range offered in the filters, newest first. */
 const CURRENT_YEAR = new Date().getFullYear();
@@ -462,7 +456,7 @@ export const years = Array.from(
   (_, i) => CURRENT_YEAR + 2 - i
 );
 
-export const seasons = ['Winter', 'Spring', 'Summer', 'Fall'];
+export const seasons = SEASONS;
 
 export const statuses = ['all', 'airing', 'completed', 'upcoming'] as const;
 

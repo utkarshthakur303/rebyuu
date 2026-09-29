@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { toRow, DETAIL_COLUMNS } from '../scripts/animeRow.mjs';
+import { toRow, DETAIL_COLUMNS, SEASON_YEAR_COLUMNS } from '../scripts/animeRow.mjs';
 
 // Trimmed from AniList's live response for Frieren (28 Sep 2026).
 const frieren = {
@@ -114,6 +114,23 @@ test('the next episode becomes a number and an ISO timestamp', () => {
   assert.equal(row.next_episode, 1181);
   assert.equal(row.next_episode_at, new Date(1798985760 * 1000).toISOString());
   assert.equal(toRow(frieren).next_episode_at, null);
+});
+
+test("a December premiere is filed under the next year's Winter, as AniList files it", () => {
+  const row = toRow({ ...frieren, startDate: { year: 2023 }, season: 'WINTER', seasonYear: 2024 });
+
+  assert.equal(row.year, 2023);
+  assert.equal(row.season, 'Winter');
+  assert.equal(row.season_year, 2024);
+});
+
+test('season_year is written only once its own column exists', () => {
+  const row = toRow({ ...frieren, seasonYear: 2023 }, { details: true, seasonYear: false });
+
+  assert.ok(!('season_year' in row));
+  assert.equal(row.title_romaji, 'Sousou no Frieren');
+  assert.deepEqual(SEASON_YEAR_COLUMNS, ['season_year']);
+  assert.ok(!DETAIL_COLUMNS.includes('season_year'));
 });
 
 test('without the migration, only the original columns are produced', () => {

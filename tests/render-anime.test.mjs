@@ -138,9 +138,11 @@ test('extra facts appear in the fact list', async () => {
 
   const root = rootOf((await render(handler, 'route=anime&ref=1-target-show')).body);
 
-  for (const [label, value] of [['Format', 'TV series'], ['Season', 'Fall 2020'], ['Studio', 'MADHOUSE'], ['Source', 'Manga'], ['Episode length', '24 min']]) {
+  for (const [label, value] of [['Format', 'TV series'], ['Studio', 'MADHOUSE'], ['Source', 'Manga'], ['Episode length', '24 min']]) {
     assert.match(root, new RegExp(`${label}: </dt><dd[^>]*>${value}</dd>`), label);
   }
+  // The season links its page.
+  assert.match(root, /Season: <\/dt><dd[^>]*><a href="\/seasons\/fall-2020">Fall 2020<\/a><\/dd>/);
 });
 
 test('an airing title shows when its next episode airs, in UTC', async () => {

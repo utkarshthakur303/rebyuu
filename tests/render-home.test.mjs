@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { hubNavLinks } from '../api/_hubs.js';
 import { loadHandler, installFetch, anime, page, render, rootOf, animeLinks, section } from './helpers.mjs';
 
 const handler = await loadHandler();
@@ -107,4 +108,15 @@ test('with Supabase down the homepage still renders its heading and description'
   assert.equal(res.statusCode, 200);
   assert.match(rootOf(res.body), /<h1[^>]*>Rebyuu<\/h1>/);
   assert.deepEqual(animeLinks(rootOf(res.body)), []);
+});
+
+test('the homepage links this season, next season, the airing schedule and upcoming, after its rails', async () => {
+  installFetch({ tables: { anime_index: [], ratings: [] }, anilist: null });
+
+  const root = rootOf((await render(handler, 'route=home')).body);
+  const links = hubNavLinks(new Date());
+
+  assert.equal(links.length, 4);
+  for (const { path, label } of links) assert.match(root, new RegExp(`<a href="${path}">${label}</a>`), path);
+  assert.ok(root.indexOf('Seasons and charts') > root.lastIndexOf('Upcoming</h2>'));
 });

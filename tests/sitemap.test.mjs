@@ -77,7 +77,7 @@ test('lastmod is the date the row last changed', async () => {
   assert.match((await get('kind=anime&page=1')).body, /<lastmod>2026-09-27<\/lastmod>/);
 });
 
-test('the index lists the static sitemap and one anime sitemap per URLS_PER_SITEMAP titles', async () => {
+test('the index lists the static, hub and episode sitemaps and one anime sitemap per URLS_PER_SITEMAP titles', async () => {
   const many = Array.from({ length: URLS_PER_SITEMAP + 1 }, (_, i) => row(i + 1, { rating: 7 }));
   installFetch({ tables: { anime_index: many } });
 
@@ -86,6 +86,7 @@ test('the index lists the static sitemap and one anime sitemap per URLS_PER_SITE
   assert.equal(index.statusCode, 200);
   assert.deepEqual(locs(index.body), [
     'https://www.rebyuu.app/sitemap-static.xml',
+    'https://www.rebyuu.app/sitemap-hubs.xml',
     'https://www.rebyuu.app/sitemap-episodes.xml',
     'https://www.rebyuu.app/sitemap-anime-1.xml',
     'https://www.rebyuu.app/sitemap-anime-2.xml',
@@ -158,4 +159,38 @@ test('before the migration, the episode sitemap still lists discussed episodes',
 
   assert.equal(res.statusCode, 200);
   assert.deepEqual(episodeLocs(res.body).sort(), ['/anime/1-show-1/episode/3', '/anime/1-show-1/episode/7']);
+});
+
+test('the hub sitemap lists airing, upcoming and every season with 12 quality titles', async () => {
+  const season = (from, count, extra) => Array.from({ length: count }, (_, i) => row(from + i, { rating: 7, ...extra }));
+  installFetch({
+    tables: {
+      anime_index: [
+        ...season(100, 12, { season: 'Fall', year: 2015 }),
+        ...season(200, 11, { season: 'Spring', year: 2015 }),
+        ...season(300, 12, { season: 'Winter', year: 2015, season_year: 2016 }),
+        ...season(400, 12, { season: 'Summer', year: 2015, genres: ['Hentai'] }),
+      ],
+    },
+  });
+
+  const res = await get('kind=hubs');
+
+  assert.equal(res.statusCode, 200);
+  assert.match(res.headers['content-type'], /xml/);
+  assert.deepEqual(locs(res.body), [
+    'https://www.rebyuu.app/airing',
+    'https://www.rebyuu.app/upcoming',
+    'https://www.rebyuu.app/seasons/fall-2015',
+    'https://www.rebyuu.app/seasons/winter-2016',
+  ]);
+});
+
+test('the hub sitemap is a 503 when the database is down, never an empty list', async () => {
+  installFetch({ tables: null });
+
+  const res = await get('kind=hubs');
+
+  assert.equal(res.statusCode, 503);
+  assert.equal(res.headers['cache-control'], 'no-store');
 });

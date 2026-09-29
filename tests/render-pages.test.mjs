@@ -75,3 +75,47 @@ test('/browse falls back to the archive ordered by stored rating when AniList is
 
   assert.deepEqual(animeLinks(rootOf(res.body)), ['anilist-2', 'anilist-3', 'anilist-1']);
 });
+
+const bootOf = (html) => JSON.parse(html.match(/<script id="rebyuu-boot" type="application\/json">(.*?)<\/script>/s)?.[1] ?? 'null');
+
+test('/browse hands its first page to React, synopses cut to fit a card', async () => {
+  installFetch({
+    tables: { anime_index: [anime(1, 'One', { description: 'y'.repeat(800) }), anime(3, 'Three')], ratings: [] },
+    anilist: { browse: page([3, 999, 1]) },
+  });
+
+  const { list } = bootOf((await render(handler, 'route=browse')).body);
+
+  assert.equal(list.path, '/browse');
+  assert.deepEqual(list.items.map((item) => item.id), ['anilist-3', 'anilist-1']);
+  assert.ok(list.items[1].description.length <= 301);
+  assert.equal(list.live, true);
+  assert.equal(list.hasMore, true);
+});
+
+test('a filtered /browse URL hands React nothing, since its grid is a different list', async () => {
+  installFetch({ tables: { anime_index: [anime(1, 'One')], ratings: [] }, anilist: { browse: page([1]) } });
+
+  assert.equal(bootOf((await render(handler, 'route=browse&genre=action')).body), null);
+});
+
+test('/browse links the season, airing and upcoming pages', async () => {
+  installFetch({ tables: { anime_index: [], ratings: [] }, anilist: null });
+
+  const root = rootOf((await render(handler, 'route=browse')).body);
+
+  assert.match(root, /<a href="\/airing">Airing schedule<\/a>/);
+  assert.match(root, /<a href="\/upcoming">Upcoming anime<\/a>/);
+});
+
+test('with AniList down, /browse lists the best rated titles, Hentai left out, and React fetches its own', async () => {
+  installFetch({
+    tables: { anime_index: [anime(1, 'Good', { rating: 8 }), anime(2, 'Adult', { rating: 9, genres: ['Hentai'] })], ratings: [] },
+    anilist: null,
+  });
+
+  const res = await render(handler, 'route=browse');
+
+  assert.deepEqual(animeLinks(rootOf(res.body)), ['anilist-1']);
+  assert.equal(bootOf(res.body), null);
+});

@@ -1,5 +1,7 @@
 import { animePath } from './_paths.js';
 import { episodePath, episodeActivity, indexableEpisodes } from './_episodes.js';
+import { qualityFilter } from './_quality.js';
+import { censusPath, indexedHubPaths } from './_hubdb.js';
 
 /**
  * XML sitemaps for title pages, generated from anime_index on request.
@@ -13,6 +15,7 @@ import { episodePath, episodeActivity, indexableEpisodes } from './_episodes.js'
  *   /sitemap-index.xml     -> ?kind=index      the static sitemap + every anime page
  *   /sitemap-anime-N.xml   -> ?kind=anime&page=N
  *   /sitemap-episodes.xml  -> ?kind=episodes   indexable episode pages (_episodes.js)
+ *   /sitemap-hubs.xml      -> ?kind=hubs       season, airing and upcoming pages (_hubdb.js)
  *
  * lastmod comes from anime_index.updated_at. That is only meaningful because
  * the sync writes a row only when something in it changed; before that, every
@@ -29,33 +32,6 @@ export const URLS_PER_SITEMAP = 10_000;
 /** PostgREST's default cap on rows in one response. */
 const ROWS_PER_REQUEST = 1000;
 
-export const MIN_SYNOPSIS_CHARS = 130;
-export const MIN_RATING = 6;
-
-/**
- * Which titles are submitted. Every title page stays crawlable; this is only
- * the set we actively vouch for.
- *
- *   - a synopsis of at least MIN_SYNOPSIS_CHARS — below that the page is
- *     little more than a title and a poster; and then either
- *   - released and rated at least MIN_RATING, or
- *   - airing now, rated or not — new shows have no score for their first
- *     weeks, which is exactly when people search for them, or
- *   - announced for this year or later. An "upcoming" row from years ago is
- *     an announcement that went nowhere.
- *
- * PostgREST has no length() filter, so the synopsis rule is a LIKE pattern:
- * MIN_SYNOPSIS_CHARS single-character wildcards then "anything" matches
- * exactly the strings at least that long.
- */
-function gate() {
-  const year = new Date().getUTCFullYear();
-  return [
-    `description=like.${'_'.repeat(MIN_SYNOPSIS_CHARS)}*`,
-    `or=(and(rating.gte.${MIN_RATING},status.neq.upcoming),status.eq.airing,and(status.eq.upcoming,year.gte.${year}))`,
-  ].join('&');
-}
-
 async function query(path, { from, to, count = false } = {}) {
   if (!SUPABASE_URL || !SUPABASE_KEY) throw new Error('Supabase is not configured');
   const headers = { apikey: SUPABASE_KEY, Authorization: `Bearer ${SUPABASE_KEY}` };
@@ -69,7 +45,7 @@ async function query(path, { from, to, count = false } = {}) {
 }
 
 async function countTitles() {
-  const { contentRange } = await query(`anime_index?select=id&${gate()}`, { from: 0, to: 0, count: true });
+  const { contentRange } = await query(`anime_index?select=id&${qualityFilter()}`, { from: 0, to: 0, count: true });
   const total = Number(contentRange?.split('/')[1]);
   if (!Number.isFinite(total)) throw new Error('Supabase returned no count');
   return total;
@@ -81,7 +57,7 @@ async function titlesOnPage(page) {
   const chunks = [];
   for (let from = first; from < first + URLS_PER_SITEMAP; from += ROWS_PER_REQUEST) {
     chunks.push(
-      query(`anime_index?select=id,title,updated_at&${gate()}&order=id.asc`, { from, to: from + ROWS_PER_REQUEST - 1 })
+      query(`anime_index?select=id,title,updated_at&${qualityFilter()}&order=id.asc`, { from, to: from + ROWS_PER_REQUEST - 1 })
     );
   }
   return (await Promise.all(chunks)).flatMap((c) => c.rows);
@@ -149,7 +125,7 @@ function urlset(entries) {
 }
 
 function sitemapIndex(pages) {
-  const entries = ['sitemap-static.xml', 'sitemap-episodes.xml', ...Array.from({ length: pages }, (_, i) => `sitemap-anime-${i + 1}.xml`)];
+  const entries = ['sitemap-static.xml', 'sitemap-hubs.xml', 'sitemap-episodes.xml', ...Array.from({ length: pages }, (_, i) => `sitemap-anime-${i + 1}.xml`)];
   return `<?xml version="1.0" encoding="UTF-8"?>\n<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${entries
     .map((file) => `  <sitemap>\n    <loc>${ORIGIN}/${file}</loc>\n  </sitemap>`)
     .join('\n')}\n</sitemapindex>\n`;
@@ -178,6 +154,11 @@ export default async function handler(req, res) {
       return rows.length
         ? send(res, 200, urlset(rows.map((row) => ({ path: animePath(row), lastmod: day(row.updated_at) }))))
         : send(res, 404, '');
+    }
+    if (kind === 'hubs') {
+      // A season is listed the day the sync brings it 12 quality titles. The
+      // same count decides each page's robots tag, so nothing listed says noindex.
+      return send(res, 200, urlset(indexedHubPaths(await allRows(censusPath())).map((path) => ({ path }))));
     }
     if (kind === 'episodes') {
       // An empty list is a valid answer here: no episode has earned a page yet.
