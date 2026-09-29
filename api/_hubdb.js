@@ -1,4 +1,4 @@
-import { EXCLUDED_GENRES, SEASONS, seasonYearOf } from './_catalog.js';
+import { EXCLUDED_GENRES, GENRES, SEASONS, seasonYearOf } from './_catalog.js';
 import { qualityFilter } from './_quality.js';
 import { hubPath, parseHubPath } from './_hubs.js';
 
@@ -17,7 +17,7 @@ import { hubPath, parseHubPath } from './_hubs.js';
 export const MIN_HUB_TITLES = 12;
 
 /** Hubs whose lists are never thin. */
-const ALWAYS_INDEXED = ['airing', 'upcoming'];
+const ALWAYS_INDEXED = ['airing', 'upcoming', 'top'];
 
 const NOT_EXCLUDED = `genres.not.ov.{${EXCLUDED_GENRES.join(',')}}`;
 
@@ -33,6 +33,9 @@ function hubTerms(hub) {
   }
   if (hub.kind === 'airing') terms.push('status.eq.airing');
   if (hub.kind === 'upcoming') terms.push('status.eq.upcoming');
+  // The start year, as Browse's year filter and the year page's list use.
+  if (hub.kind === 'year') terms.push(`year.eq.${hub.year}`);
+  if (hub.kind === 'genre') terms.push(`genres.ov.{"${hub.genre}"}`);
   return terms;
 }
 
@@ -59,19 +62,25 @@ export function hubFallbackPath(hub, { columns, limit }) {
   return `anime_index?select=${columns}&and=(${hubTerms(hub).join(',')})&order=${order}&limit=${limit}`;
 }
 
-/** Every quality title's season and years, for indexedHubPaths. Read a page at a time. */
+/** Every quality title's season, years and genres, for indexedHubPaths. Read a page at a time. */
 export const censusPath = (now = new Date()) =>
-  `anime_index?select=season,year,season_year&${qualityFilter([NOT_EXCLUDED], now)}&order=id.asc`;
+  `anime_index?select=season,year,season_year,genres&${qualityFilter([NOT_EXCLUDED], now)}&order=id.asc`;
 
 /**
  * Every hub worth indexing, from censusPath's rows: the hubs that always
- * are, then each season with MIN_HUB_TITLES quality titles, oldest first.
- * A season appears here — and so in the sitemap — the day the sync brings
- * it enough titles, with no code or copy to change.
+ * are, then each genre, year (up to this one) and season with
+ * MIN_HUB_TITLES quality titles, oldest first. A season appears here — and
+ * so in the sitemap — the day the sync brings it enough titles, with no code
+ * or copy to change.
  */
 export function indexedHubPaths(rows, now = new Date()) {
+  const genres = new Map();
+  const years = new Map();
   const seasons = new Map();
   for (const row of rows) {
+    for (const genre of row.genres || []) if (GENRES.includes(genre)) genres.set(genre, (genres.get(genre) || 0) + 1);
+    if (row.year && row.year <= now.getUTCFullYear()) years.set(row.year, (years.get(row.year) || 0) + 1);
+
     const year = seasonYearOf(row);
     if (!row.season || !year) continue;
     const hub = parseHubPath(`/seasons/${String(row.season).toLowerCase()}-${year}`, now);
@@ -81,9 +90,16 @@ export function indexedHubPaths(rows, now = new Date()) {
     entry.count++;
     seasons.set(path, entry);
   }
-  const indexed = [...seasons.values()]
+  const indexedSeasons = [...seasons.values()]
     .filter((entry) => isIndexable(entry.hub, entry.count))
     .sort((a, b) => a.hub.year - b.hub.year || SEASONS.indexOf(a.hub.season) - SEASONS.indexOf(b.hub.season))
     .map((entry) => hubPath(entry.hub));
-  return [...ALWAYS_INDEXED.map((kind) => hubPath({ kind })), ...indexed];
+  const indexedGenres = GENRES.filter((genre) => (genres.get(genre) || 0) >= MIN_HUB_TITLES).map((genre) => hubPath({ kind: 'genre', genre }));
+  const indexedYears = [...years]
+    .filter(([, count]) => count >= MIN_HUB_TITLES)
+    .map(([year]) => year)
+    .sort((a, b) => a - b)
+    .map((year) => hubPath({ kind: 'year', year }))
+    .filter((path) => parseHubPath(path, now));
+  return [...ALWAYS_INDEXED.map((kind) => hubPath({ kind })), ...indexedGenres, ...indexedYears, ...indexedSeasons];
 }
