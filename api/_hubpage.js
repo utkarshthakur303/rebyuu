@@ -10,6 +10,7 @@ import {
   scheduleRange, scheduleQuery, readSchedule, scheduleTime, groupSchedule,
 } from './_hubdata.js';
 import { hubCountPath, isIndexable, hubFallbackPath } from './_hubdb.js';
+import { episodePath, isEpisodeIndexable, lastEpisode } from './_episodes.js';
 
 /**
  * A hub page as served: its data (loadHub) and its HTML (renderHub). The
@@ -54,22 +55,29 @@ export async function loadHub(hub, now = new Date()) {
       ? rowsInOrder(readHubIds(ranked))
       : sb(hubFallbackPath(hub, { columns: LIST_COLUMNS, limit: servedLimit(hub) })),
     countPath ? sb(countPath) : Promise.resolve([]),
+    // Whole rows: whether an episode's page is worth linking depends on the
+    // row's schedule, and its columns depend on which migrations have run.
     scheduled.length
-      ? sb(`anime_index?id=in.(${[...new Set(scheduled.map((e) => e.id))].join(',')})&select=id,title`)
+      ? sb(`anime_index?id=in.(${[...new Set(scheduled.map((e) => e.id))].join(',')})&select=*`)
       : Promise.resolve([]),
   ]);
   if (!Array.isArray(items) || !Array.isArray(counted)) throw new HubDataError('anime_index could not be read');
 
   // Episodes of titles the catalogue has, named as it names them: a link to
-  // any other would be a link to a 404.
-  const titles = new Map((Array.isArray(scheduledRows) ? scheduledRows : []).map((row) => [row.id, row.title]));
+  // any other would be a link to a 404. Each episode's own page is linked
+  // when it is indexable (see _episodes.js), which for this week's episodes
+  // is nearly always.
+  const rows = new Map((Array.isArray(scheduledRows) ? scheduledRows : []).map((row) => [row.id, row]));
+  const pageOf = (row, n) => (n <= (lastEpisode(row) ?? 0) && isEpisodeIndexable(row, n, {}, now) ? episodePath(row, n) : null);
   return {
     items,
     hasMore: ranked ? readHubHasMore(ranked) : items.length > HUB_PAGE_SIZE,
     live: Boolean(ranked),
     indexable: isIndexable(hub, counted.length),
     links: readHubLinks(hub, ranked, now),
-    schedule: scheduled.filter((e) => titles.has(e.id)).map((e) => ({ ...e, title: titles.get(e.id) })),
+    schedule: scheduled
+      .filter((e) => rows.has(e.id))
+      .map((e) => ({ ...e, title: rows.get(e.id).title, episodePath: pageOf(rows.get(e.id), e.episode) })),
   };
 }
 
@@ -104,7 +112,7 @@ function renderSchedule(entries, now) {
   const days = groupSchedule(entries, { now, timeZone: 'UTC' }).filter((day) => day.entries.length);
   if (!days.length) return '';
   const row = (e) =>
-    `<li><time datetime="${new Date(e.at).toISOString()}">${scheduleTime(e.at, 'UTC')} UTC</time> <a href="${escapeHtml(animePath(e))}">${escapeHtml(e.title)}</a> · Episode ${e.episode}</li>`;
+    `<li><time datetime="${new Date(e.at).toISOString()}">${scheduleTime(e.at, 'UTC')} UTC</time> <a href="${escapeHtml(animePath(e))}">${escapeHtml(e.title)}</a> · ${e.episodePath ? `<a href="${escapeHtml(e.episodePath)}">Episode ${e.episode}</a>` : `Episode ${e.episode}`}</li>`;
   return `
       <section>
         <h2 ${H2}>This week's episodes</h2>

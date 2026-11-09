@@ -74,17 +74,18 @@ async function allRows(path) {
 }
 
 /**
- * The indexable episode pages: those with comments or enough ratings, plus
- * each airing show's latest and next episode. The airing half needs the
- * next-episode columns; before their migration runs that query fails, and
- * the sitemap lists the discussed episodes alone.
+ * The indexable episode pages (see _episodes.js): those with comments or
+ * enough ratings, plus each airing or announced show's episodes from the last
+ * three weeks and the next two. The scheduled half needs the next-episode or
+ * schedule columns; before their migrations run it finds nothing, and the
+ * sitemap lists the discussed episodes alone.
  */
 async function episodePaths() {
   const [comments, ratings] = await Promise.all([
     allRows('episode_comments?select=anime_id,episode_number&order=id.asc'),
     allRows('episode_ratings?select=anime_id,episode_number&order=id.asc'),
   ]);
-  const airing = await allRows('anime_index?select=*&status=eq.airing&next_episode=not.is.null&order=id.asc').catch(() => []);
+  const airing = await allRows('anime_index?select=*&status=in.(airing,upcoming)&order=id.asc').catch(() => []);
 
   const byTitle = new Map();
   const add = (row, key) => {

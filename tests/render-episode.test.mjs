@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadHandler, installFetch, anime, render, rootOf, section } from './helpers.mjs';
 
@@ -91,8 +91,8 @@ test('the next scheduled episode says when it airs, and is indexable', async () 
 
   const { body } = await render(handler, 'route=episode&ref=2-airing-show&ep=5');
 
-  assert.match(body, /<title>Airing Show Episode 5: Release Date &amp; Time · Rebyuu<\/title>/);
-  assert.match(rootOf(body), /airs on <time datetime="2099-01-02T15:00:00.000Z">Friday 2 January 2099, 15:00 UTC<\/time>/);
+  assert.match(body, /<title>Airing Show Episode 5: Release Date, Time &amp; Countdown · Rebyuu<\/title>/);
+  assert.match(rootOf(body), /comes out on <time datetime="2099-01-02T15:00:00.000Z">Friday 2 January 2099, 15:00 UTC<\/time>/);
   assert.equal(robotsOf(body), 'max-image-preview:large');
 });
 
@@ -132,3 +132,115 @@ test('the title page lists its indexable episodes as links, and only those', asy
 
   assert.deepEqual([...guide.matchAll(/href="\/anime\/2-airing-show\/episode\/(\d+)"/g)].map((m) => Number(m[1])), [2, 4, 5]);
 });
+
+// ── Release dates from the airing schedule ─────────────────────────────
+//
+// The clock is set to 9 November 2026, 02:00 UTC: Overgeared episode 7 aired
+// 11.5 hours earlier and the stored row still names it as next.
+
+const weekly = (first, count, startIso) =>
+  Array.from({ length: count }, (_, i) => ({ episode: first + i, at: new Date(Date.parse(startIso) + i * 7 * 86400000).toISOString() }));
+const overgeared = anime(212888, 'Overgeared', {
+  status: 'airing', episodes: 12, year: 2026, genres: ['Action'],
+  next_episode: 7, next_episode_at: '2026-11-08T14:30:00+00:00',
+  airing_schedule: weekly(1, 12, '2026-09-27T14:30:00Z'),
+  streaming: [{ site: 'Crunchyroll', url: 'https://www.crunchyroll.com/series/overgeared' }],
+});
+const blueBox = anime(189123, 'Blue Box Season 2', {
+  status: 'airing', episodes: 12, year: 2026,
+  airing_schedule: [...weekly(1, 4, '2026-10-04T07:30:00Z'), ...weekly(5, 8, '2026-11-08T07:30:00Z')],
+});
+const scheduled = (extra = {}) => tables({ anime_index: [series, airing, film, overgeared, blueBox], ...extra });
+
+/** Runs `fn` with the clock at `iso`. */
+const at = (iso, fn) => async () => {
+  mock.timers.enable({ apis: ['Date'], now: new Date(iso) });
+  try { await fn(); } finally { mock.timers.reset(); }
+};
+const LATE = '2026-11-09T02:00:00Z';
+
+test('an upcoming episode leads with its release date and time, even before the sync has caught up', at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+
+  const { body } = await render(handler, 'route=episode&ref=212888-overgeared&ep=8');
+
+  assert.match(body, /<title>Overgeared Episode 8: Release Date, Time &amp; Countdown · Rebyuu<\/title>/);
+  assert.match(body, /<meta name="description" content="Overgeared episode 8 comes out on Sunday 15 November 2026, 14:30 UTC: 8:00 PM IST, 9:30 AM EST\./);
+  assert.match(rootOf(body), /<h1[^>]*>Overgeared Episode 8: Release Date &amp; Time<\/h1>/);
+  assert.match(rootOf(body), /Overgeared episode 8 comes out on <time datetime="2026-11-15T14:30:00.000Z">Sunday 15 November 2026, 14:30 UTC<\/time>\./);
+  assert.equal(robotsOf(body), 'max-image-preview:large');
+}));
+
+test('the release time is given where readers are, India first', at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+
+  const times = section(rootOf((await render(handler, 'route=episode&ref=212888-overgeared&ep=8')).body), 'Overgeared episode 8 release time around the world');
+
+  assert.match(times, /<tr><td>India<\/td><td>Sun 15 Nov<\/td><td>8:00 PM IST<\/td><\/tr>\s*<tr><td>US East \(New York\)<\/td><td>Sun 15 Nov<\/td><td>9:30 AM EST<\/td><\/tr>/);
+  assert.match(times, /<td>Japan<\/td><td>Sun 15 Nov<\/td><td>11:30 PM JST<\/td>/);
+  assert.match(times, /first airs/, 'says what the time is the time of');
+}));
+
+test('a skipped week is said in the first line, and asked about', at('2026-11-02T00:00:00Z', async () => {
+  installFetch({ tables: scheduled() });
+
+  const root = rootOf((await render(handler, 'route=episode&ref=189123-blue-box-season-2&ep=5')).body);
+
+  assert.match(root, /Blue Box Season 2 episode 5 comes out a week later than usual, on <time datetime="2026-11-08T07:30:00.000Z">Sunday 8 November 2026, 07:30 UTC<\/time>\./);
+  assert.match(root, /Is Blue Box Season 2 episode 5 delayed\?/);
+}));
+
+test('an episode that aired last week says when it came out, links the next one, and stays indexable', at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+
+  const { body } = await render(handler, 'route=episode&ref=212888-overgeared&ep=6');
+  const root = rootOf(body);
+
+  assert.match(body, /<title>Overgeared Episode 6: Release Date, Where to Watch &amp; Rating · Rebyuu<\/title>/);
+  assert.match(root, /<h1[^>]*>Overgeared — Episode 6<\/h1>/);
+  assert.match(root, /Overgeared episode 6 came out on <time datetime="2026-11-01T14:30:00.000Z">Sunday 1 November 2026, 14:30 UTC<\/time>\./);
+  assert.match(root, /The next episode, <a href="\/anime\/212888-overgeared\/episode\/8">episode 8<\/a>, comes out on <time datetime="2026-11-15T14:30:00.000Z">Sunday 15 November 2026, 14:30 UTC<\/time>\./);
+  assert.doesNotMatch(root, /release time around the world/, 'the world clock is for episodes still to come');
+  assert.equal(robotsOf(body), 'max-image-preview:large');
+  assert.equal(ldOf(body)[0].datePublished, '2026-11-01T14:30:00.000Z');
+}));
+
+test('an episode that aired more than three weeks ago, with nothing on it, goes back to noindex', at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+  assert.equal(robotsOf((await render(handler, 'route=episode&ref=212888-overgeared&ep=4')).body), 'noindex, follow');
+}));
+
+test('an episode page says where to watch it', at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+
+  const watch = section(rootOf((await render(handler, 'route=episode&ref=212888-overgeared&ep=8')).body), 'Where to watch Overgeared episode 8');
+
+  assert.match(watch, /<a href="https:\/\/www.crunchyroll.com\/series\/overgeared" rel="noopener">Crunchyroll<\/a>/);
+}));
+
+test('the schedule around an episode links the episodes worth indexing, and not the page itself', at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+
+  const list = section(rootOf((await render(handler, 'route=episode&ref=212888-overgeared&ep=6')).body), 'Overgeared release schedule');
+
+  assert.deepEqual([...list.matchAll(/<li>/g)].length, 8, 'episodes 3 to 10');
+  assert.deepEqual([...list.matchAll(/href="\/anime\/212888-overgeared\/episode\/(\d+)"/g)].map((m) => Number(m[1])), [5, 7, 8, 9]);
+  assert.match(list, /Episode 7<\/a> · <time datetime="2026-11-08T14:30:00.000Z">Sunday 8 November 2026, 14:30 UTC<\/time> · out/);
+  assert.doesNotMatch(list, /<ol[^>]*style="[^"]*"[^>]*style=/, 'one style attribute');
+  assert.match(list, /Episode 10 · <time datetime="2026-11-29T14:30:00.000Z">Sunday 29 November 2026, 14:30 UTC<\/time><\/li>/);
+}));
+
+test('the questions people search an upcoming episode with are answered on its page', at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+
+  const answers = section(rootOf((await render(handler, 'route=episode&ref=212888-overgeared&ep=8')).body), 'Overgeared episode 8: quick answers');
+
+  assert.match(answers, /What time does Overgeared episode 8 come out in India\?<\/h3>\s*<p[^>]*>8:00 PM IST, on Sun 15 Nov\.<\/p>/);
+}));
+
+test("an airing show's episode pages are cached for 15 minutes, since the release status changes on the hour", at(LATE, async () => {
+  installFetch({ tables: scheduled() });
+
+  assert.equal((await render(handler, 'route=episode&ref=212888-overgeared&ep=8')).headers['cache-control'], 'public, s-maxage=900, stale-while-revalidate=3600');
+  assert.equal((await render(handler, 'route=episode&ref=1-target-show&ep=3')).headers['cache-control'], 'public, s-maxage=3600, stale-while-revalidate=86400');
+}));

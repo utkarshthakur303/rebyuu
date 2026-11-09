@@ -174,6 +174,32 @@ test("the airing page shows the week's episodes of known titles, and is cached b
   assert.deepEqual(bootOf(res.body).list.schedule.map((e) => [e.id, e.title, e.episode]), [['anilist-1', 'Airing One', 5]]);
 });
 
+test("this week's episodes link their own page where it is worth indexing, in the HTML and for React", async () => {
+  const soon = Math.floor(Date.now() / 1000) + 3600;
+  const episode = (id, n) => ({ episode: n, airingAt: soon, media: { id, isAdult: false, genres: ['Action'], title: { english: `AniList ${id}`, romaji: null } } });
+  installFetch({
+    tables: {
+      anime_index: [
+        // The next episode on its row: its page is indexable.
+        anime(1, 'Airing One', { status: 'airing', next_episode: 5, next_episode_at: new Date(soon * 1000).toISOString() }),
+        // Nothing known about its schedule: no page worth linking.
+        anime(2, 'Airing Two', { status: 'airing' }),
+      ],
+    },
+    anilist: aniList({
+      list: { p1: media([1, 2]), p2: noPage },
+      schedule: { s1: { airingSchedules: [episode(1, 5), episode(2, 3)] }, s2: { airingSchedules: [] }, s3: { airingSchedules: [] }, s4: { airingSchedules: [] } },
+    }),
+  });
+
+  const res = await render(handler, 'route=hub&hub=airing');
+  const root = rootOf(res.body);
+
+  assert.match(root, /<a href="\/anime\/1-airing-one">Airing One<\/a> · <a href="\/anime\/1-airing-one\/episode\/5">Episode 5<\/a>/);
+  assert.match(root, /<a href="\/anime\/2-airing-two">Airing Two<\/a> · Episode 3<\/li>/);
+  assert.deepEqual(bootOf(res.body).list.schedule.map((e) => e.episodePath), ['/anime/1-airing-one/episode/5', null]);
+});
+
 test('the upcoming page links each season its shows are announced for', async () => {
   const shows = [{ id: 1, season: 'SPRING', seasonYear: YEAR + 1 }, { id: 2, season: null, seasonYear: null }, { id: 3, season: 'WINTER', seasonYear: YEAR + 1 }];
   installFetch({

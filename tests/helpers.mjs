@@ -166,6 +166,9 @@ function postgrest(tables, url, missingColumns) {
   if (limit != null) rows = rows.slice(0, limit);
   if (columns && columns.every((c) => /^\w+$/.test(c))) {
     rows = rows.map((row) => Object.fromEntries(columns.map((c) => [c, row[c] ?? null])));
+  } else if (!columns && missingColumns.size) {
+    // select=* returns the columns the table has, so none it does not have yet.
+    rows = rows.map((row) => Object.fromEntries(Object.entries(row).filter(([c]) => !missingColumns.has(c))));
   }
   return { rows, total };
 }

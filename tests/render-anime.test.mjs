@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { loadHandler, installFetch, anime, render, rootOf, animeLinks, section } from './helpers.mjs';
 
@@ -145,13 +145,13 @@ test('extra facts appear in the fact list', async () => {
   assert.match(root, /Season: <\/dt><dd[^>]*><a href="\/seasons\/fall-2020">Fall 2020<\/a><\/dd>/);
 });
 
-test('an airing title shows when its next episode airs, in UTC', async () => {
+test("an airing title shows when its next episode comes out, in UTC and India's and New York's time, linking its page", async () => {
   const airing = { ...detailed, status: 'airing', next_episode: 5, next_episode_at: '2099-01-02T15:00:00+00:00' };
   installFetch({ tables: { anime_index: [airing], ratings: [] } });
 
   const { body } = await render(handler, 'route=anime&ref=1-target-show');
 
-  assert.match(rootOf(body), /When is the next episode of Target Show\?<\/h2>\s*<p[^>]*>Episode 5 airs on <time datetime="2099-01-02T15:00:00.000Z">Friday 2 January 2099, 15:00 UTC<\/time>\.<\/p>/);
+  assert.match(rootOf(body), /When is the next episode of Target Show\?<\/h2>\s*<p[^>]*><a href="\/anime\/1-target-show\/episode\/5">Episode 5<\/a> comes out on <time datetime="2099-01-02T15:00:00.000Z">Friday 2 January 2099, 15:00 UTC<\/time>: 8:30 PM IST, 10:00 AM EST\.<\/p>/);
   assert.match(body, /<title>Target Show \(2020\) — Next Episode, Reviews &amp; Where to Watch · Rebyuu<\/title>/);
 });
 
@@ -327,4 +327,59 @@ test('genres link their genre pages; a genre Browse does not offer is named, not
   const root = rootOf((await render(handler, 'route=anime&ref=7-seven')).body);
 
   assert.match(root, /Genres: <\/dt><dd[^>]*><a href="\/genres\/slice-of-life">Slice of Life<\/a>, Boys Love<\/dd>/);
+});
+
+// ── The release schedule ──────────────────────────────────────────────
+
+const weekly = (first, count, startIso) =>
+  Array.from({ length: count }, (_, i) => ({ episode: first + i, at: new Date(Date.parse(startIso) + i * 7 * 86400000).toISOString() }));
+const overgeared = anime(212888, 'Overgeared', {
+  status: 'airing', episodes: 12, year: 2026,
+  next_episode: 7, next_episode_at: '2026-11-08T14:30:00+00:00',
+  airing_schedule: weekly(1, 12, '2026-09-27T14:30:00Z'),
+});
+const at = (iso, fn) => async () => {
+  mock.timers.enable({ apis: ['Date'], now: new Date(iso) });
+  try { await fn(); } finally { mock.timers.reset(); }
+};
+
+test('the next episode is the one after the last to air, though the row still names the last', at('2026-11-09T02:00:00Z', async () => {
+  installFetch({ tables: { anime_index: [overgeared], ratings: [] } });
+
+  const next = section(rootOf((await render(handler, 'route=anime&ref=212888-overgeared')).body), 'When is the next episode of Overgeared?');
+
+  assert.match(next, /<a href="\/anime\/212888-overgeared\/episode\/8">Episode 8<\/a> comes out on <time datetime="2026-11-15T14:30:00.000Z">/);
+}));
+
+test('an airing title lists its release schedule, linking the episodes worth indexing', at('2026-11-09T02:00:00Z', async () => {
+  installFetch({ tables: { anime_index: [overgeared], ratings: [] } });
+
+  const list = section(rootOf((await render(handler, 'route=anime&ref=212888-overgeared')).body), 'Overgeared release schedule');
+
+  assert.equal([...list.matchAll(/<li>/g)].length, 12);
+  assert.deepEqual([...list.matchAll(/href="\/anime\/212888-overgeared\/episode\/(\d+)"/g)].map((m) => Number(m[1])), [5, 6, 7, 8, 9]);
+  assert.match(list, /<li>Episode 1 · <time datetime="2026-09-27T14:30:00.000Z">Sunday 27 September 2026, 14:30 UTC<\/time> · out<\/li>/);
+  assert.match(list, /Episode 8<\/a> · <time datetime="2026-11-15T14:30:00.000Z">Sunday 15 November 2026, 14:30 UTC<\/time> · next<\/li>/);
+}));
+
+test('a long runner lists the part of its schedule around the next episode', at('2026-11-09T02:00:00Z', async () => {
+  const longRunner = { ...overgeared, episodes: null, airing_schedule: weekly(1150, 35, '2026-04-12T01:30:00Z') };
+  installFetch({ tables: { anime_index: [longRunner], ratings: [] } });
+
+  const list = section(rootOf((await render(handler, 'route=anime&ref=212888-overgeared')).body), 'Overgeared release schedule');
+
+  // 1150 aired 12 Apr; 1180 aired 8 Nov 01:30; 1181 is next, and 1184 the last scheduled.
+  assert.deepEqual([...list.matchAll(/Episode (\d+)/g)].map((m) => Number(m[1])), [1178, 1179, 1180, 1181, 1182, 1183, 1184]);
+}));
+
+test('a finished title has no release schedule', async () => {
+  installFetch({ tables: { anime_index: [{ ...overgeared, status: 'completed' }], ratings: [] } });
+  assert.equal(section(rootOf((await render(handler, 'route=anime&ref=212888-overgeared')).body), 'release schedule'), '');
+});
+
+test("an airing title's page is cached for 15 minutes, since its next episode changes when one airs", async () => {
+  installFetch({ tables: { anime_index: [{ ...overgeared, airing_schedule: weekly(1, 12, '2099-01-04T14:30:00Z') }, target], ratings: [] } });
+
+  assert.equal((await render(handler, 'route=anime&ref=212888-overgeared')).headers['cache-control'], 'public, s-maxage=900, stale-while-revalidate=3600');
+  assert.equal((await render(handler, 'route=anime&ref=1-target-show')).headers['cache-control'], 'public, s-maxage=3600, stale-while-revalidate=86400');
 });
