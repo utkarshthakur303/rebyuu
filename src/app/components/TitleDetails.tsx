@@ -10,6 +10,9 @@ import {
   quickAnswers,
   streamingLinks,
 } from '../../../api/_titlepage.js';
+import { scheduleOf, scheduleWindow, zoneTime } from '../../../api/_schedule.js';
+import { episodePath, isEpisodeIndexable, lastEpisode } from '../../../api/_episodes.js';
+import { Countdown, ScheduleList, readerZone } from './ReleaseTime';
 
 /**
  * The follow-up answers on a title page: where to stream it, when the next
@@ -88,20 +91,62 @@ export function WhereToWatch({ anime }: { anime: Anime }) {
   );
 }
 
+const clock = (at: Date, timeZone: string) => {
+  const t = zoneTime(at, timeZone);
+  return `${t.time} ${t.zone}`;
+};
+
+/**
+ * When the next episode comes out, with a countdown. The reader's own time
+ * zone first (the served HTML says UTC), then India's and New York's, as the
+ * served page gives them. The next episode is always indexable, so linked.
+ */
 export function NextEpisode({ anime }: { anime: Anime }) {
   const next = anime.status === 'airing' ? nextEpisode(anime) : null;
   if (!next) return null;
+  // India's and New York's time, unless that is already the reader's own.
+  const mine = zoneTime(next.at, readerZone()).zone;
+  const elsewhere = ['Asia/Kolkata', 'America/New_York'].map((z) => clock(next.at, z)).filter((c) => !c.endsWith(` ${mine}`));
   return (
     <motion.section {...reveal} className="rounded-lg border border-ink/20 bg-card p-4 sm:p-6">
       <h2 className={heading} style={anton}>When is the next episode of {anime.title}?</h2>
-      <p className="flex items-start gap-2 text-base text-foreground/85" style={outfit}>
+      <p className="mb-4 flex items-start gap-2 text-base text-foreground/85" style={outfit}>
         <CalendarClock className="mt-1 h-4 w-4 shrink-0 text-crimson" aria-hidden="true" />
         <span>
-          Episode {next.episode} airs on{' '}
-          {/* The reader's own time zone; the served HTML says UTC. */}
-          <time dateTime={next.at.toISOString()} className="font-semibold">{formatAiring(next.at)}</time>.
+          <Link to={episodePath(anime, next.episode)} className="font-semibold underline decoration-ink/30 underline-offset-2 hover:text-crimson">
+            Episode {next.episode}
+          </Link>{' '}
+          comes out on{' '}
+          <time dateTime={next.at.toISOString()} className="font-semibold">{formatAiring(next.at)}</time>
+          {elsewhere.length > 0 && <span className="text-muted-foreground"> ({elsewhere.join(', ')})</span>}.
         </span>
       </p>
+      <Countdown at={next.at} />
+    </motion.section>
+  );
+}
+
+/** Past this many episodes, the schedule lists only the part around the next one. */
+const FULL_SCHEDULE = 26;
+
+/** "<show> release schedule": every scheduled episode, as the served page lists it. */
+export function ReleaseSchedule({ anime, activity }: { anime: Anime; activity: Map<number, { comments: number; ratings: number }> }) {
+  if (anime.status !== 'airing' && anime.status !== 'upcoming') return null;
+  const all: { episode: number; at: Date }[] = scheduleOf(anime);
+  if (all.length < 2) return null;
+  const next = nextEpisode(anime);
+  const entries = all.length <= FULL_SCHEDULE ? all : scheduleWindow(anime, next?.episode ?? all[all.length - 1].episode);
+  const last = lastEpisode(anime) ?? 0;
+  return (
+    <motion.section {...reveal} className="rounded-lg border border-ink/20 bg-card p-4 sm:p-6">
+      <h2 className={heading} style={anton}>{anime.title} release schedule</h2>
+      <ScheduleList
+        anime={anime}
+        entries={entries}
+        next={next?.episode ?? null}
+        linkable={(n) => n <= last && isEpisodeIndexable(anime, n, activity.get(n))}
+      />
+      <p className="mt-3 text-xs text-muted-foreground" style={outfit}>Air times from AniList, in your time zone.</p>
     </motion.section>
   );
 }

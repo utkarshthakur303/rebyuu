@@ -16,6 +16,7 @@
 import { animePath } from './_paths.js';
 import { seasonYearOf } from './_catalog.js';
 import { seasonPath, parseHubPath } from './_hubs.js';
+import { scheduleOf, zoneName } from './_schedule.js';
 
 const MAX_DESCRIPTION = 160;
 
@@ -34,7 +35,7 @@ const joinList = (items) =>
   items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} & ${items[items.length - 1]}`;
 
 /** "a, b and c" — for prose. */
-const joinWords = (items) =>
+export const joinWords = (items) =>
   items.length <= 1 ? items.join('') : `${items.slice(0, -1).join(', ')} and ${items[items.length - 1]}`;
 
 const article = (word) => (/^[aeiou]/i.test(word) ? 'an' : 'a');
@@ -235,11 +236,16 @@ export function titleFacts(row) {
   return facts;
 }
 
-/** The next scheduled episode, or null once it has aired (the row lags a day). */
+/**
+ * The next episode to air, from the schedule (see _schedule.js), so it moves
+ * on the moment an episode airs rather than at the next daily sync. Null when
+ * nothing further is scheduled.
+ */
 export function nextEpisode(row, now = new Date()) {
-  if (!row.next_episode || !row.next_episode_at) return null;
-  const at = new Date(row.next_episode_at);
-  return Number.isFinite(at.getTime()) && at > now ? { episode: row.next_episode, at } : null;
+  const upcoming = scheduleOf(row).filter((e) => e.at > now);
+  if (!upcoming.length) return null;
+  const first = upcoming.reduce((a, b) => (b.at < a.at ? b : a));
+  return { episode: first.episode, at: first.at };
 }
 
 /**
@@ -252,9 +258,7 @@ export function formatAiring(at, { timeZone } = {}) {
     .format(at)
     .replace(',', '');
   const time = new Intl.DateTimeFormat('en-GB', { ...zone, hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(at);
-  const name = timeZone === 'UTC'
-    ? 'UTC'
-    : new Intl.DateTimeFormat('en-GB', { ...zone, timeZoneName: 'short' }).formatToParts(at).find((p) => p.type === 'timeZoneName')?.value;
+  const name = timeZone === 'UTC' ? 'UTC' : zoneName(at, timeZone ?? Intl.DateTimeFormat().resolvedOptions().timeZone);
   return `${date}, ${time}${name ? ` ${name}` : ''}`;
 }
 

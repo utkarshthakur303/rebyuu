@@ -26,6 +26,18 @@ export const DETAIL_COLUMNS = [
  */
 export const SEASON_YEAR_COLUMNS = ['season_year'];
 
+/**
+ * Added by airing_schedule_migration.sql, and checked for on its own, like
+ * season_year. See api/_schedule.js for what the pages do with it.
+ */
+export const SCHEDULE_COLUMNS = ['airing_schedule'];
+
+/** Episodes kept per title: a two-cour show, with room to spare. */
+const SCHEDULE_SIZE = 40;
+
+/** A show that finished this long ago has no use for its schedule. */
+const SCHEDULE_STALE_MS = 60 * 86400000;
+
 const STATUS = {
   RELEASING: 'airing',
   FINISHED: 'completed',
@@ -83,12 +95,56 @@ function relatedEntries(relations) {
   ];
 }
 
+/** Well-formed entries only, as { episode, at: ISO string }. */
+function scheduleEntries(list) {
+  const out = [];
+  for (const e of Array.isArray(list) ? list : []) {
+    const at = Date.parse(e?.at);
+    if (Number.isInteger(e?.episode) && e.episode >= 1 && Number.isFinite(at)) out.push({ episode: e.episode, at: new Date(at).toISOString() });
+  }
+  return out;
+}
+
 /**
- * `details` and `seasonYear` say which migrations the database has had
- * (DETAIL_COLUMNS, SEASON_YEAR_COLUMNS); a column is only produced once it
- * exists.
+ * AniList's schedule for one title: the first 25 entries it holds
+ * (`airingSchedule`, which is the whole run for a seasonal show) and the next
+ * four to air (`upcomingSchedule`, which is what matters for a long runner
+ * whose first 25 are years old). [{ episode, at }] in episode order.
  */
-export function toRow(m, { details = true, seasonYear = details } = {}) {
+function airingScheduleOf(m) {
+  const nodes = [...(m.airingSchedule?.nodes || []), ...(m.upcomingSchedule?.nodes || [])];
+  const byEpisode = new Map();
+  for (const n of nodes) {
+    if (Number.isInteger(n?.episode) && Number.isFinite(n?.airingAt)) {
+      byEpisode.set(n.episode, { episode: n.episode, at: new Date(n.airingAt * 1000).toISOString() });
+    }
+  }
+  return [...byEpisode.values()].sort((a, b) => a.episode - b.episode);
+}
+
+/**
+ * The schedule to store: what AniList lists now, plus the stored episodes
+ * that have already aired and AniList no longer returns — so a long runner,
+ * of which AniList returns only the next four, keeps its recent past. A
+ * stored future episode AniList no longer lists is dropped, since it has been
+ * rescheduled or cancelled. Capped to the latest SCHEDULE_SIZE episodes, and
+ * emptied once the show's last episode is SCHEDULE_STALE_MS old.
+ */
+export function mergeSchedule(stored, fetched, now = new Date()) {
+  const byEpisode = new Map();
+  for (const e of scheduleEntries(stored)) if (Date.parse(e.at) <= now.getTime()) byEpisode.set(e.episode, e);
+  for (const e of scheduleEntries(fetched)) byEpisode.set(e.episode, e);
+  const entries = [...byEpisode.values()].sort((a, b) => a.episode - b.episode).slice(-SCHEDULE_SIZE);
+  const latest = Math.max(...entries.map((e) => Date.parse(e.at)));
+  return entries.length && now.getTime() - latest <= SCHEDULE_STALE_MS ? entries : [];
+}
+
+/**
+ * `details`, `seasonYear` and `schedule` say which migrations the database
+ * has had (DETAIL_COLUMNS, SEASON_YEAR_COLUMNS, SCHEDULE_COLUMNS); a column
+ * is only produced once it exists.
+ */
+export function toRow(m, { details = true, seasonYear = details, schedule = details } = {}) {
   const row = {
     id: `anilist-${m.id}`,
     title: m.title.english || m.title.romaji,
@@ -124,5 +180,6 @@ export function toRow(m, { details = true, seasonYear = details } = {}) {
     relations: relatedEntries(m.relations),
     next_episode: m.nextAiringEpisode?.episode ?? null,
     next_episode_at: m.nextAiringEpisode ? new Date(m.nextAiringEpisode.airingAt * 1000).toISOString() : null,
+    ...(schedule ? { airing_schedule: airingScheduleOf(m) } : {}),
   };
 }

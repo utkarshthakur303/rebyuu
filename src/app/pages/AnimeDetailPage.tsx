@@ -3,7 +3,7 @@ import { ArrowLeft, Star, Play, Plus, Calendar, Film, Trash2 } from 'lucide-reac
 import { motion } from 'motion/react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { readBootAnime, getAnimeById, getAnimeReviews, getCommunityScore, getRelatedAnime, getKnownTitles, getEpisodeActivity, type Anime, type CommunityScore, type Review } from '@/services/anime';
-import { ExtraFacts, WhereToWatch, NextEpisode, QuickAnswers, RelatedSeasons } from '@/app/components/TitleDetails';
+import { ExtraFacts, WhereToWatch, NextEpisode, ReleaseSchedule, QuickAnswers, RelatedSeasons } from '@/app/components/TitleDetails';
 import { AnimeCard } from '@/app/components/AnimeCard';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/services/supabase';
@@ -18,6 +18,8 @@ import { titleTag, metaDescription, otherNames, nameLang } from '../../../api/_t
 import { animePath, parseAnimeRef } from '../../../api/_paths.js';
 import { lastEpisode, episodePath, isEpisodeIndexable } from '../../../api/_episodes.js';
 import { nextEpisode } from '../../../api/_titlepage.js';
+import { airingOf, zoneTime } from '../../../api/_schedule.js';
+import { readerZone } from '@/app/components/ReleaseTime';
 
 export default function AnimeDetailPage() {
   // The URL carries "154587-frieren-…" (or an older form); the row id is anilist-154587.
@@ -485,6 +487,7 @@ export default function AnimeDetailPage() {
         <div className="space-y-6 sm:space-y-8 mt-6 sm:mt-8">
           {anime && <WhereToWatch anime={anime} />}
           {anime && <NextEpisode anime={anime} />}
+          {anime && <ReleaseSchedule anime={anime} activity={episodeActivity} />}
           {anime?.trailer && (
             <motion.section
               initial={{ opacity: 0, y: 20 }}
@@ -532,24 +535,30 @@ export default function AnimeDetailPage() {
                   const path = episodePath(anime, episodeNum);
                   const next = anime.status === 'airing' ? nextEpisode(anime) : null;
                   const caption = next?.episode === episodeNum ? 'Next' : next && next.episode - 1 === episodeNum ? 'Latest' : null;
+                  const airs = airingOf(anime, episodeNum);
                   const className = "flex items-center gap-3 sm:gap-4 rounded-md border border-ink/20 bg-card p-3 sm:p-4 text-left transition-all hover:border-ink/35 hover:shadow-lg hover:shadow-black/20 min-h-[60px] sm:min-h-[70px] group";
                   const inner = (
                     <>
                       <div className="flex h-10 w-10 sm:h-11 sm:w-11 shrink-0 items-center justify-center rounded-md bg-crimson/10 text-sm font-bold text-crimson group-hover:bg-crimson/15 transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>
                         {episodeNum}
                       </div>
-                      {/* No per-episode metadata is fetched for any title — not
-                          runtimes, not episode names, not air dates. This used to
-                          render a hardcoded "24 min" under every episode of every
-                          series, which was false for most of them and, on a long
-                          run like Hunter x Hunter, accounted for 444 of the page's
-                          984 words. Padding a page with a repeated invented string
-                          is the scaled-content pattern search engines demote, so
-                          the button is now just what it honestly is: navigation. */}
+                      {/* The only per-episode data is the air date, from AniList's
+                          schedule (airing_schedule), shown where it is known — no
+                          runtimes, no episode names. This used to render a
+                          hardcoded "24 min" under every episode of every series,
+                          which was false for most of them and, on a long run like
+                          Hunter x Hunter, accounted for 444 of the page's 984
+                          words. Padding a page with a repeated invented string is
+                          the scaled-content pattern search engines demote. */}
                       <div className="flex-1 min-w-0">
                         <h3 className="font-medium text-sm text-foreground group-hover:text-gold transition-colors" style={{ fontFamily: 'Outfit, sans-serif' }}>Episode {episodeNum}</h3>
                         {caption && (
                           <p className="text-[10px] uppercase tracking-[0.14em] text-orange" style={{ fontFamily: 'JetBrains Mono, ui-monospace, monospace' }}>{caption}</p>
+                        )}
+                        {airs && (
+                          <p className="text-[11px] normal-case tracking-normal text-muted-foreground" style={{ fontFamily: 'Outfit, sans-serif' }}>
+                            <time dateTime={airs.toISOString()}>{zoneTime(airs, readerZone()).day}</time>
+                          </p>
                         )}
                       </div>
                     </>

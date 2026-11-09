@@ -10,8 +10,9 @@ import { PAGES } from './_pages.js';
 import { animePath, parseAnimeRef } from './_paths.js';
 import {
   lastEpisode, episodePath, episodeActivity, isEpisodeIndexable, indexableEpisodes,
-  episodeTitleTag, episodeDescription, MIN_EPISODE_RATINGS,
+  episodeTitleTag, episodeDescription, episodeRelease, episodeAnswers, weeksWord, MIN_EPISODE_RATINGS,
 } from './_episodes.js';
+import { releaseTimes, scheduleWindow, scheduleOf, zoneTime } from './_schedule.js';
 import {
   titleTag, metaDescription, otherNames, nameLang,
   titleFacts, nextEpisode, formatAiring, relationGroups, quickAnswers, streamingLinks,
@@ -213,7 +214,11 @@ function redirect(res, path) {
  */
 const PAGE_CACHE = 'public, s-maxage=3600, stale-while-revalidate=86400';
 
-/** The airing schedule goes out of date by the hour, so /airing is served fresher. */
+/**
+ * The airing schedule goes out of date by the hour, so /airing, and the
+ * pages of shows still airing, are served fresher: an episode page's title,
+ * description and indexing change the moment its episode airs.
+ */
 const AIRING_CACHE = 'public, s-maxage=900, stale-while-revalidate=3600';
 
 function send(res, status, html, cache = PAGE_CACHE) {
@@ -426,6 +431,7 @@ function renderAnime(row, community, related = [], known = new Map(), activity =
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:13px;opacity:.7;margin-top:10px">Synopsis, artwork and score via <a href="https://anilist.co">AniList</a>. See <a href="/about">About</a> for full sourcing.</p>` : ''}
       ${renderWhereToWatch(row)}
       ${renderNextEpisode(row)}
+      ${renderReleaseSchedule(row, activity)}
       ${renderQuickAnswers(row)}
       ${renderRelations(row, known)}
       ${renderEpisodeGuide(row, activity)}
@@ -532,14 +538,56 @@ function renderWhereToWatch(row) {
       </section>`;
 }
 
-/** When the next episode airs, while that is still in the future. */
+/** "8:00 PM IST" */
+const clockIn = (at, timeZone) => {
+  const t = zoneTime(at, timeZone);
+  return `${t.time} ${t.zone}`;
+};
+
+/**
+ * When the next episode comes out, while that is still in the future: in UTC,
+ * then in India and New York, where most of the searches for it come from.
+ * The next episode is always indexable, so its page is linked.
+ */
 function renderNextEpisode(row) {
   const next = nextEpisode(row);
   if (!next || row.status !== 'airing') return '';
   return `
       <section>
         <h2 ${H2}>When is the next episode of ${escapeHtml(row.title || 'Untitled')}?</h2>
-        <p ${P}>Episode ${next.episode} airs on <time datetime="${next.at.toISOString()}">${escapeHtml(formatAiring(next.at, { timeZone: 'UTC' }))}</time>.</p>
+        <p ${P}><a href="${escapeHtml(episodePath(row, next.episode))}">Episode ${next.episode}</a> comes out on <time datetime="${next.at.toISOString()}">${escapeHtml(formatAiring(next.at, { timeZone: 'UTC' }))}</time>: ${escapeHtml(clockIn(next.at, 'Asia/Kolkata'))}, ${escapeHtml(clockIn(next.at, 'America/New_York'))}.</p>
+      </section>`;
+}
+
+/** Past this many episodes, a title page lists only the part around the next one. */
+const FULL_SCHEDULE = 26;
+
+/**
+ * Every scheduled episode of a show that is airing or about to, with its air
+ * time — "<show> release schedule" — linking the episode pages worth indexing.
+ */
+function renderReleaseSchedule(row, activity) {
+  if (row.status !== 'airing' && row.status !== 'upcoming') return '';
+  const now = new Date();
+  const all = scheduleOf(row);
+  if (all.length < 2) return '';
+  const next = nextEpisode(row, now);
+  const entries = all.length <= FULL_SCHEDULE ? all : scheduleWindow(row, next?.episode ?? all[all.length - 1].episode);
+  const last = lastEpisode(row);
+  const item = (e) => {
+    const label = e.episode <= last && isEpisodeIndexable(row, e.episode, activity.get(e.episode), now)
+      ? `<a href="${escapeHtml(episodePath(row, e.episode))}">Episode ${e.episode}</a>`
+      : `Episode ${e.episode}`;
+    const note = e.at <= now ? ' · out' : next?.episode === e.episode ? ' · next' : '';
+    return `<li>${label} · <time datetime="${e.at.toISOString()}">${escapeHtml(formatAiring(e.at, { timeZone: 'UTC' }))}</time>${note}</li>`;
+  };
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')} release schedule</h2>
+        <ol style="list-style:none;padding:0;font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7">
+          ${entries.map(item).join('\n          ')}
+        </ol>
+        <p ${NOTE}>Air times from <a href="https://anilist.co">AniList</a>, in UTC.</p>
       </section>`;
 }
 
@@ -602,12 +650,102 @@ function renderEpisodeGuide(row, activity) {
       </section>`;
 }
 
+/** A <time> for `at`, in the UTC form the prerender always uses. */
+const timeTag = (at) => `<time datetime="${at.toISOString()}">${escapeHtml(formatAiring(at, { timeZone: 'UTC' }))}</time>`;
+
+/**
+ * The first lines of an episode page: when it comes out, or when it came out
+ * and when the next one does. `linkable(m)` says whether episode m's page may
+ * be linked (it is indexable).
+ */
+function renderReleaseLead(row, n, release, linkable) {
+  if (!release) return '';
+  const title = escapeHtml(row.title || 'Untitled');
+  if (release.state === 'upcoming') {
+    const when = release.breakWeeks
+      ? `comes out ${weeksWord(release.breakWeeks)} later than usual, on ${timeTag(release.at)}`
+      : `comes out on ${timeTag(release.at)}`;
+    return `<p ${P}>${title} episode ${n} ${when}.</p>`;
+  }
+  let text = `${title} episode ${n} came out on ${timeTag(release.at)}.`;
+  if (release.next) {
+    const m = release.next.episode;
+    const name = linkable(m) ? `<a href="${escapeHtml(episodePath(row, m))}">episode ${m}</a>` : `episode ${m}`;
+    text += ` The next episode, ${name}, comes out on ${timeTag(release.next.at)}.`;
+  }
+  return `<p ${P}>${text}</p>`;
+}
+
+/** An upcoming episode's release time in the places Rebyuu's readers are. */
+function renderReleaseTimes(row, n, release) {
+  if (release?.state !== 'upcoming') return '';
+  const rows = releaseTimes(release.at)
+    .map((t) => `<tr><td>${escapeHtml(t.place)}</td><td>${escapeHtml(t.day)}</td><td>${escapeHtml(`${t.time} ${t.zone}`)}</td></tr>`)
+    .join('\n          ');
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')} episode ${n} release time around the world</h2>
+        <table style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:15px;line-height:1.8;border-collapse:collapse">
+          <thead><tr><th style="text-align:left;padding-right:16px">Where</th><th style="text-align:left;padding-right:16px">Date</th><th style="text-align:left">Time</th></tr></thead>
+          <tbody>
+          ${rows}
+          </tbody>
+        </table>
+        <p ${NOTE}>Times are when the episode first airs, from AniList's schedule. Streaming services usually add it the same day, sometimes a few hours later.</p>
+      </section>`;
+}
+
+/** "Where to watch <title> episode <n>": the services AniList lists, linked. */
+function renderEpisodeWatch(row, n) {
+  const links = streamingLinks(row);
+  if (!links.length) return '';
+  return `
+      <section>
+        <h2 ${H2}>Where to watch ${escapeHtml(row.title || 'Untitled')} episode ${n}</h2>
+        <p ${P}>${links.map((l) => `<a href="${escapeHtml(l.url)}" rel="noopener">${escapeHtml(l.site)}</a>`).join(' · ')}</p>
+        <p ${NOTE}>Availability varies by country. Services as listed on AniList.</p>
+      </section>`;
+}
+
+/** The scheduled episodes around this one, linked where indexable. */
+function renderScheduleExcerpt(row, n, linkable, now) {
+  const entries = scheduleWindow(row, n);
+  if (entries.length < 2) return '';
+  const item = (e) => {
+    const label = e.episode === n
+      ? `<strong>Episode ${e.episode}</strong>`
+      : linkable(e.episode) ? `<a href="${escapeHtml(episodePath(row, e.episode))}">Episode ${e.episode}</a>` : `Episode ${e.episode}`;
+    return `<li>${label} · ${timeTag(e.at)}${e.at <= now ? ' · out' : ''}</li>`;
+  };
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')} release schedule</h2>
+        <ol style="list-style:none;padding:0;font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;line-height:1.7">
+          ${entries.map(item).join('\n          ')}
+        </ol>
+        <p ${NOTE}>Air times from <a href="https://anilist.co">AniList</a>, in UTC. <a href="${escapeHtml(animePath(row))}">Every episode of ${escapeHtml(row.title || 'Untitled')}</a></p>
+      </section>`;
+}
+
+/** The questions people search an episode with, answered from its schedule. */
+function renderEpisodeAnswers(row, n, now) {
+  const answers = episodeAnswers(row, n, { now });
+  if (!answers.length) return '';
+  return `
+      <section>
+        <h2 ${H2}>${escapeHtml(row.title || 'Untitled')} episode ${n}: quick answers</h2>
+        ${answers.map((qa) => `<h3 style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:16px;font-weight:600;margin-top:14px">${escapeHtml(qa.question)}</h3>
+        <p ${P}>${escapeHtml(qa.answer)}</p>`).join('\n        ')}
+      </section>`;
+}
+
 /**
  * One episode's page. `ratings` and `comments` hold the title's rows (for
  * which neighbours are indexable); `thread` is this episode's comments with
  * their text; `authors` maps user ids to usernames.
  */
 function renderEpisode(row, n, { ratings, comments, thread, authors }) {
+  const now = new Date();
   const title = String(row.title || 'Untitled');
   const seriesUrl = `${ORIGIN}${animePath(row)}`;
   const url = `${ORIGIN}${episodePath(row, n)}`;
@@ -616,8 +754,9 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
   const own = ratings.filter((r) => r.episode_number === n);
   const average = own.length ? Math.round((own.reduce((sum, r) => sum + (r.rating ?? 0), 0) / own.length) * 10) / 10 : null;
   const stats = { average, count: own.length, comments: thread.length };
-  const indexable = isEpisodeIndexable(row, n, activity.get(n));
-  const next = row.status === 'airing' ? nextEpisode(row) : null;
+  const indexable = isEpisodeIndexable(row, n, activity.get(n), now);
+  const linkable = (m) => m >= 1 && m <= last && isEpisodeIndexable(row, m, activity.get(m), now);
+  const release = episodeRelease(row, n, { now });
 
   const episode = {
     '@type': 'TVEpisode',
@@ -627,6 +766,7 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
     episodeNumber: n,
     partOfSeries: { '@type': 'TVSeries', '@id': `${seriesUrl}#work`, name: title, url: seriesUrl },
   };
+  if (release?.state === 'aired') episode.datePublished = release.at.toISOString();
   if (own.length >= MIN_EPISODE_RATINGS) {
     episode.aggregateRating = { '@type': 'AggregateRating', ratingValue: average, ratingCount: own.length, bestRating: 10, worstRating: 1 };
   }
@@ -649,13 +789,11 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
 
   const neighbour = (m, label) => {
     if (m < 1 || m > last) return '';
-    return isEpisodeIndexable(row, m, activity.get(m))
+    return linkable(m)
       ? `<a href="${escapeHtml(episodePath(row, m))}" rel="${m < n ? 'prev' : 'next'}">${label}</a>`
       : `<span>${label}</span>`;
   };
-  const airs = next && next.episode === n
-    ? `<p ${P}>Episode ${n} airs on <time datetime="${next.at.toISOString()}">${escapeHtml(formatAiring(next.at, { timeZone: 'UTC' }))}</time>.</p>`
-    : '';
+  const heading = release?.state === 'upcoming' ? `${title} Episode ${n}: Release Date & Time` : `${title} — Episode ${n}`;
   const score = own.length >= MIN_EPISODE_RATINGS
     ? `<p ${P}><strong>Rebyuu rating:</strong> ${escapeHtml(average.toFixed(1))}/10 from ${own.length} ratings</p>`
     : '';
@@ -669,9 +807,13 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
   const content = `
     <main class="mx-auto max-w-3xl px-4 py-12">
       <p style="font-family:Outfit,ui-sans-serif,sans-serif;font-size:14px"><a href="${escapeHtml(animePath(row))}">${escapeHtml(title)}</a> · Episode ${n}${row.episodes ? ` of ${row.episodes}` : ''}</p>
-      <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,48px);line-height:1;margin-top:8px">${escapeHtml(title)} — Episode ${n}</h1>
-      ${airs}
+      <h1 style="font-family:Anton,Impact,sans-serif;font-size:clamp(28px,6vw,48px);line-height:1;margin-top:8px">${escapeHtml(heading)}</h1>
+      ${renderReleaseLead(row, n, release, linkable)}
       ${score}
+      ${renderReleaseTimes(row, n, release)}
+      ${renderEpisodeWatch(row, n)}
+      ${renderScheduleExcerpt(row, n, linkable, now)}
+      ${renderEpisodeAnswers(row, n, now)}
       <section>
         <h2 ${H2}>Discussion</h2>
         ${discussion}
@@ -684,8 +826,8 @@ function renderEpisode(row, n, { ratings, comments, thread, authors }) {
 
   return injectBody(
     injectHead(SHELL, {
-      title: episodeTitleTag(row, n),
-      description: episodeDescription(row, n, stats, { timeZone: 'UTC' }),
+      title: episodeTitleTag(row, n, { now }),
+      description: episodeDescription(row, n, stats, { now }),
       canonical: url,
       image: row.cover_image || null,
       preload: null, // an episode page shows no image; nothing to wait for
@@ -803,7 +945,7 @@ export default async function handler(req, res) {
         content: p.content,
         date: String(p.created_at || '').slice(0, 10),
       }));
-      return send(res, 200, renderAnime(row, community, related, known, activity, reviews));
+      return send(res, 200, renderAnime(row, community, related, known, activity, reviews), row.status === 'airing' ? AIRING_CACHE : PAGE_CACHE);
     }
 
     if (route === 'episode') {
@@ -833,7 +975,7 @@ export default async function handler(req, res) {
         comments: Array.isArray(comments) ? comments : [],
         thread: posts,
         authors,
-      }));
+      }), row.status === 'airing' ? AIRING_CACHE : PAGE_CACHE);
     }
 
     const variant = isVariant(url);

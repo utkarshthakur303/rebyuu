@@ -1,26 +1,39 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, CalendarClock, Star } from 'lucide-react';
+import { ArrowLeft, CalendarClock, ExternalLink, Star } from 'lucide-react';
 import { getAnimeById, getEpisodeActivity, getEpisodeRatings, type Anime } from '@/services/anime';
 import { EpisodeModal } from '@/app/components/EpisodeModal';
+import { Countdown, ReleaseTimesTable, ScheduleList } from '@/app/components/ReleaseTime';
 import { useSeo } from '@/utils/useSeo';
 import { useNoIndex } from '@/utils/useNoIndex';
 import { useAnimeTitle } from '@/context/TitleLangContext';
 import { animePath, parseAnimeRef } from '../../../api/_paths.js';
-import { nextEpisode, formatAiring } from '../../../api/_titlepage.js';
+import { nextEpisode, formatAiring, streamingLinks } from '../../../api/_titlepage.js';
+import { scheduleWindow } from '../../../api/_schedule.js';
 import {
   lastEpisode,
   episodePath,
   isEpisodeIndexable,
   episodeTitleTag,
   episodeDescription,
+  episodeRelease,
+  episodeAnswers,
+  weeksWord,
   MIN_EPISODE_RATINGS,
 } from '../../../api/_episodes.js';
+
+const outfit = { fontFamily: 'Outfit, ui-sans-serif, sans-serif' };
+const anton = { fontFamily: 'Anton, Impact, sans-serif' };
+const mono = { fontFamily: 'JetBrains Mono, ui-monospace, monospace' };
+const card = 'rounded-lg border border-ink/20 bg-card p-4 sm:p-6';
+const heading = 'mb-3 sm:mb-4 text-xl sm:text-2xl text-foreground';
 
 type Activity = Map<number, { comments: number; ratings: number }>;
 
 /**
- * One episode's page: when it airs, how Rebyuu rates it, and the discussion.
+ * One episode's page: when it comes out (with a countdown, in the reader's
+ * time and around the world) or when it came out, where to watch it, the
+ * schedule around it, how Rebyuu rates it, and the discussion.
  *
  * The prerender serves the same page (api/render.js, route=episode) and both
  * take their rules from api/_episodes.js: which episodes have pages, which are
@@ -99,12 +112,23 @@ export default function EpisodePage() {
     );
   }
 
-  const next = anime.status === 'airing' ? nextEpisode(anime) : null;
+  const release = episodeRelease(anime, n);
+  const linkable = (m: number) => m >= 1 && m <= last! && isEpisodeIndexable(anime, m, activity.get(m));
+  const schedule: { episode: number; at: Date }[] = scheduleWindow(anime, n);
+  const answers: { question: string; answer: string }[] = episodeAnswers(anime, n);
+  const links: { site: string; url: string }[] = streamingLinks(anime);
+  const next = nextEpisode(anime);
+  const EpisodeLink = ({ m }: { m: number }) =>
+    linkable(m) ? (
+      <Link to={episodePath(anime, m)} className="font-semibold underline decoration-ink/30 underline-offset-2 hover:text-crimson">episode {m}</Link>
+    ) : (
+      <button type="button" onClick={() => navigate(episodePath(anime, m))} className="normal-case tracking-normal font-semibold underline decoration-ink/30 underline-offset-2 hover:text-crimson" style={outfit}>episode {m}</button>
+    );
 
   const Neighbour = ({ m, children }: { m: number; children: React.ReactNode }) => {
     if (m < 1 || m > last!) return <span />;
     const className = 'btn-imperial-outline min-h-[48px]';
-    return isEpisodeIndexable(anime, m, activity.get(m)) ? (
+    return linkable(m) ? (
       <Link to={episodePath(anime, m)} className={className}>{children}</Link>
     ) : (
       <button type="button" onClick={() => navigate(episodePath(anime, m))} className={className}>{children}</button>
@@ -126,22 +150,97 @@ export default function EpisodePage() {
         Episode {n}{anime.episodes ? ` of ${anime.episodes}` : ''}
       </p>
       <h1 className="mb-6 text-3xl sm:text-4xl uppercase leading-[0.95] text-foreground" style={{ fontFamily: 'Anton, Impact, sans-serif' }}>
-        {displayTitle} — Episode {n}
+        {release?.state === 'upcoming' ? `${displayTitle} Episode ${n}: Release Date & Time` : `${displayTitle} — Episode ${n}`}
       </h1>
 
-      <div className="mb-8 flex flex-wrap gap-3">
-        {next && next.episode === n && (
-          <p className="flex items-center gap-2 border border-ink/20 bg-card px-4 py-3 text-sm" style={{ fontFamily: 'Outfit, sans-serif' }}>
-            <CalendarClock className="h-4 w-4 text-crimson" aria-hidden="true" />
-            Airs on <time dateTime={next.at.toISOString()} className="font-semibold">{formatAiring(next.at)}</time>
+      {release?.state === 'upcoming' && (
+        <section className={`${card} mb-6`} aria-label="Release date">
+          <p className="mb-4 flex items-start gap-2 text-base text-foreground/85" style={outfit}>
+            <CalendarClock className="mt-1 h-4 w-4 shrink-0 text-crimson" aria-hidden="true" />
+            <span>
+              {displayTitle} episode {n} comes out{release.breakWeeks ? ` ${weeksWord(release.breakWeeks)} later than usual,` : ''} on{' '}
+              {/* The reader's own time zone; the served HTML says UTC. */}
+              <time dateTime={release.at.toISOString()} className="font-semibold">{formatAiring(release.at)}</time>.
+            </span>
           </p>
-        )}
+          <Countdown at={release.at} />
+        </section>
+      )}
+      {release?.state === 'aired' && (
+        <section className={`${card} mb-6`} aria-label="Release date">
+          <p className="flex items-start gap-2 text-base text-foreground/85" style={outfit}>
+            <CalendarClock className="mt-1 h-4 w-4 shrink-0 text-crimson" aria-hidden="true" />
+            <span>
+              {displayTitle} episode {n} came out on{' '}
+              <time dateTime={release.at.toISOString()} className="font-semibold">{formatAiring(release.at)}</time>.
+              {release.next && (
+                <>
+                  {' '}The next episode, <EpisodeLink m={release.next.episode} />, comes out on{' '}
+                  <time dateTime={release.next.at.toISOString()} className="font-semibold">{formatAiring(release.next.at)}</time>.
+                </>
+              )}
+            </span>
+          </p>
+        </section>
+      )}
+
+      <div className="mb-8 flex flex-wrap gap-3">
         {score && score.count >= MIN_EPISODE_RATINGS && (
           <p className="flex items-center gap-2 border border-ink/20 bg-card px-4 py-3 text-sm" style={{ fontFamily: 'Outfit, sans-serif' }}>
             <Star className="h-4 w-4 fill-crimson text-crimson" aria-hidden="true" />
             <span className="font-semibold">{score.average.toFixed(1)}/10</span>
             <span className="text-muted-foreground">from {score.count} ratings</span>
           </p>
+        )}
+      </div>
+
+      <div className="mb-8 space-y-6">
+        {release?.state === 'upcoming' && <ReleaseTimesTable at={release.at} title={displayTitle || anime.title} n={n} />}
+
+        {links.length > 0 && (
+          <section className={card}>
+            <h2 className={heading} style={anton}>Where to watch {displayTitle} episode {n}</h2>
+            <div className="flex flex-wrap gap-2">
+              {links.map((link) => (
+                <a
+                  key={link.site}
+                  href={link.url}
+                  target="_blank"
+                  rel="noopener"
+                  className="inline-flex min-h-[44px] items-center gap-2 border-2 border-ink bg-background px-4 py-2 text-sm font-medium text-foreground transition-shadow hover:shadow-[4px_4px_0_var(--orange)]"
+                  style={outfit}
+                >
+                  {link.site}
+                  <ExternalLink className="h-3.5 w-3.5 opacity-60" aria-hidden="true" />
+                </a>
+              ))}
+            </div>
+            <p className="mt-3 text-xs text-muted-foreground" style={outfit}>Availability varies by country. Services as listed on AniList.</p>
+          </section>
+        )}
+
+        {schedule.length >= 2 && (
+          <section className={card}>
+            <h2 className={heading} style={anton}>{displayTitle} release schedule</h2>
+            <ScheduleList anime={anime} entries={schedule} current={n} next={next?.episode ?? null} linkable={linkable} />
+            <p className="mt-3 text-xs text-muted-foreground" style={outfit}>
+              Air times from AniList, in your time zone. <Link to={animePath(anime)} className="underline underline-offset-2 hover:text-crimson">Every episode of {displayTitle}</Link>
+            </p>
+          </section>
+        )}
+
+        {answers.length > 0 && (
+          <section className={card}>
+            <h2 className={heading} style={anton}>{displayTitle} episode {n}: quick answers</h2>
+            <div className="space-y-4">
+              {answers.map((qa) => (
+                <div key={qa.question}>
+                  <h3 className="text-sm font-semibold uppercase tracking-[0.08em] text-foreground/80" style={mono}>{qa.question}</h3>
+                  <p className="mt-1 text-base leading-relaxed text-foreground/85" style={outfit}>{qa.answer}</p>
+                </div>
+              ))}
+            </div>
+          </section>
         )}
       </div>
 

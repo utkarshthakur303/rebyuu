@@ -3,7 +3,7 @@ dotenv.config({ path: ".env" });
 import fetch from "node-fetch";
 import { createClient } from '@supabase/supabase-js';
 import { planWrite, submitToIndexNow, SYNCED_COLUMNS } from './indexNow.mjs';
-import { toRow, DETAIL_COLUMNS, SEASON_YEAR_COLUMNS } from './animeRow.mjs';
+import { toRow, mergeSchedule, DETAIL_COLUMNS, SEASON_YEAR_COLUMNS, SCHEDULE_COLUMNS } from './animeRow.mjs';
 import { recheckBatches, RECHECK_BATCH } from './recheck.mjs';
 import { seasonPasses } from './passes.mjs';
 import { animePath } from '../api/_paths.js';
@@ -12,7 +12,8 @@ const ANILIST_API = 'https://graphql.anilist.co';
 // The detail fields (names, studio, streaming links, next episode, relations)
 // are fetched on every run; they are only written once the migration that adds
 // their columns has run. Measured on a live 50-title page: ~1.6 s, ~150-200 KB,
-// well inside AniList's complexity limit.
+// well inside AniList's complexity limit. The two airing schedules (see
+// animeRow.mjs) took the same page to ~1.8 s and ~230 KB (9 Nov 2026).
 const ANILIST_QUERY = `
   query ($page: Int, $perPage: Int, $sort: [MediaSort], $status: MediaStatus, $ids: [Int], $season: MediaSeason, $seasonYear: Int) {
     Page(page: $page, perPage: $perPage) {
@@ -63,6 +64,12 @@ const ANILIST_QUERY = `
           airingAt
           episode
         }
+        airingSchedule(perPage: 25) {
+          nodes { episode airingAt }
+        }
+        upcomingSchedule: airingSchedule(notYetAired: true, perPage: 4) {
+          nodes { episode airingAt }
+        }
         relations {
           edges {
             relationType
@@ -87,6 +94,7 @@ type AniListMedia = { id: number } & Record<string, unknown>;
 interface Schema {
   details: boolean;
   seasonYear: boolean;
+  schedule: boolean;
   columns: string[];
 }
 
@@ -110,12 +118,24 @@ async function detectSchema(supabase: ReturnType<typeof createClient>): Promise<
   if (seasonYearMissing) {
     console.log(`season_year not found (${seasonYearMissing}). Skipping it — run supabase/season_year_migration.sql to enable it.`);
   }
+  const scheduleMissing = await missingColumns(supabase, SCHEDULE_COLUMNS);
+  if (scheduleMissing) {
+    console.log(`airing_schedule not found (${scheduleMissing}). Skipping it — run supabase/airing_schedule_migration.sql to enable it.`);
+  }
   const details = !detailsMissing;
   const seasonYear = !seasonYearMissing;
+  // The schedule is written alongside the detail columns, never without them.
+  const schedule = details && !scheduleMissing;
   return {
     details,
     seasonYear,
-    columns: [...SYNCED_COLUMNS, ...(details ? DETAIL_COLUMNS : []), ...(seasonYear ? SEASON_YEAR_COLUMNS : [])],
+    schedule,
+    columns: [
+      ...SYNCED_COLUMNS,
+      ...(details ? DETAIL_COLUMNS : []),
+      ...(seasonYear ? SEASON_YEAR_COLUMNS : []),
+      ...(schedule ? SCHEDULE_COLUMNS : []),
+    ],
   };
 }
 
@@ -183,7 +203,7 @@ async function syncAnimeToSupabase(
   media: AniListMedia[],
   schema: Schema
 ): Promise<string[]> {
-  const animeData = media.map((m) => toRow(m, { details: schema.details, seasonYear: schema.seasonYear }));
+  const fetched = media.map((m) => toRow(m, { details: schema.details, seasonYear: schema.seasonYear, schedule: schema.schedule }));
 
   // Read the rows as they stand, so only titles that really changed are
   // written (keeping updated_at, and so the sitemap's lastmod, truthful) and
@@ -191,8 +211,16 @@ async function syncAnimeToSupabase(
   const { data: existing, error: readError } = await supabase
     .from('anime_index')
     .select(['id', ...schema.columns].join(','))
-    .in('id', animeData.map((a) => a.id));
+    .in('id', fetched.map((a) => a.id));
   if (readError) console.error(`  could not read stored rows, writing all: ${readError.message}`);
+
+  // AniList returns only the next few episodes of a long runner, so the ones
+  // that have aired are carried over from the stored schedule (mergeSchedule).
+  const stored = new Map(((readError ? null : existing) ?? []).map((row: Record<string, unknown>) => [row.id, row]));
+  const now = new Date();
+  const animeData = schema.schedule
+    ? fetched.map((row) => ({ ...row, airing_schedule: mergeSchedule(stored.get(row.id)?.airing_schedule, row.airing_schedule, now) }))
+    : fetched;
   const { write, changed } = planWrite(readError ? null : existing ?? [], animeData, { columns: schema.columns });
 
   if (write.length) {

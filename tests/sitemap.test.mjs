@@ -1,4 +1,4 @@
-import { test } from 'node:test';
+import { test, mock } from 'node:test';
 import assert from 'node:assert/strict';
 import { installFetch, anime } from './helpers.mjs';
 
@@ -150,6 +150,34 @@ test('the episode sitemap lists discussed or rated episodes, and airing shows\' 
     '/anime/2-show-2/episode/4',
     '/anime/2-show-2/episode/5',
   ]);
+});
+
+const weekly = (first, count, startIso) =>
+  Array.from({ length: count }, (_, i) => ({ episode: first + i, at: new Date(Date.parse(startIso) + i * 7 * 86400000).toISOString() }));
+
+test("the episode sitemap lists a scheduled show's last three weeks and next two weeks of episodes", async () => {
+  mock.timers.enable({ apis: ['Date'], now: new Date('2026-11-09T02:00:00Z') });
+  try {
+    // The row as the sync left it: episode 7 still named next, though it has aired.
+    const overgeared = row(212888, {
+      title: 'Overgeared', episodes: 12, status: 'airing',
+      next_episode: 7, next_episode_at: '2026-11-08T14:30:00+00:00',
+      airing_schedule: weekly(1, 12, '2026-09-27T14:30:00Z'),
+    });
+    installFetch({ tables: epTables({ anime_index: [overgeared] }) });
+
+    const listed = episodeLocs((await get('kind=episodes')).body).filter((l) => l.startsWith('/anime/212888-'));
+
+    assert.deepEqual(listed.sort(), [5, 6, 7, 8, 9].map((n) => `/anime/212888-overgeared/episode/${n}`));
+  } finally {
+    mock.timers.reset();
+  }
+});
+
+test("an announced show's first episode is listed once its premiere is scheduled", async () => {
+  installFetch({ tables: epTables({ anime_index: [row(4, { episodes: 12, status: 'upcoming', next_episode: 1, next_episode_at: '2099-01-01T00:00:00+00:00' })] }) });
+
+  assert.ok(episodeLocs((await get('kind=episodes')).body).includes('/anime/4-show-4/episode/1'));
 });
 
 test('before the migration, the episode sitemap still lists discussed episodes', async () => {
