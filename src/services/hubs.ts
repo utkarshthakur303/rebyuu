@@ -19,6 +19,8 @@ export interface ScheduleEntry {
   episode: number;
   /** Milliseconds since the epoch. */
   at: number;
+  /** The episode's page, when the served page found it worth linking (api/_hubpage.js). */
+  episodePath?: string | null;
 }
 
 type Hub = { kind: string; season?: string; year?: number; genre?: string };

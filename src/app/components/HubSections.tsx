@@ -158,7 +158,11 @@ export function AiringSchedule({ entries }: { entries: ScheduleEntry[] | null })
                 {e.title}
               </Link>
               <span className="shrink-0 text-xs text-foreground/60">
-                Ep {e.episode}
+                {e.episodePath ? (
+                  <Link to={e.episodePath} className="underline decoration-ink/30 underline-offset-2 hover:text-crimson">Ep {e.episode}</Link>
+                ) : (
+                  <>Ep {e.episode}</>
+                )}
                 {e.at <= now.getTime() ? ' · aired' : ''}
               </span>
             </li>

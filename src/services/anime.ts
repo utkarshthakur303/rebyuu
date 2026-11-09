@@ -41,6 +41,8 @@ export interface Anime {
   relations?: { id: string; relation: string; title: string | null; year: number | null; format: string | null }[];
   next_episode?: number | null;
   next_episode_at?: string | null;
+  /* supabase/airing_schedule_migration.sql: when each episode airs. */
+  airing_schedule?: { episode: number; at: string }[] | null;
 }
 
 export interface Review {
